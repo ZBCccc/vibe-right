@@ -3,10 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="${0:A:h:h}"
 BUILD_DIR="$ROOT_DIR/.build/tests"
+BUILD_TARGET="$(uname -m)-apple-macos13.0"
 mkdir -p "$BUILD_DIR"
 
 swiftc \
   -swift-version 5 \
+  -target "$BUILD_TARGET" \
   -framework AppKit \
   -framework CoreImage \
   "$ROOT_DIR/Sources/Core/Localization.swift" \
@@ -20,4 +22,5 @@ swiftc \
   "$ROOT_DIR/Tests/CoreTests.swift" \
   -o "$BUILD_DIR/CoreTests"
 
-VIBERIGHT_ARCHIVE_TOOL="$ROOT_DIR/Resources/Tools/7zz" "$BUILD_DIR/CoreTests"
+VIBERIGHT_WEBP_TOOL="$ROOT_DIR/Resources/Tools/webp-encoder" \
+  "$BUILD_DIR/CoreTests"

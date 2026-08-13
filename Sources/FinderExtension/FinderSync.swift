@@ -252,29 +252,6 @@ final class FinderSync: FIFinderSync {
         if allRegularFiles { tools.append(.toggleFileExtension) }
         tools.append(.repairFilename)
         tools.append(.generateQRCode)
-        tools.append(contentsOf: [
-            .compress7Z,
-            .compressZIP,
-            .compress7ZSeparate,
-            .compressZIPSeparate,
-            .encryptCompress7Z,
-            .encryptCompressZIP,
-            .encryptCompress7ZSeparate,
-            .encryptCompressZIPSeparate,
-            .compress7ZDeleteOriginals,
-            .compressZIPDeleteOriginals,
-            .compress7ZSeparateDeleteOriginals,
-            .compressZIPSeparateDeleteOriginals,
-            .customCompression
-        ])
-        if urls.allSatisfy({ ["zip", "7z"].contains($0.pathExtension.lowercased()) }) {
-            tools.append(contentsOf: [
-                .extractArchive,
-                .extractArchiveSeparate,
-                .extractArchiveDeleteOriginal,
-                .extractArchiveSeparateDeleteOriginal
-            ])
-        }
         addTools(
             tools,
             to: menu,
@@ -564,17 +541,6 @@ final class FinderSync: FIFinderSync {
                 return false
             }
             try FileOperations.deletePermanently(urls)
-        case .compress7Z, .compressZIP,
-             .compress7ZSeparate, .compressZIPSeparate,
-             .encryptCompress7Z, .encryptCompressZIP,
-             .encryptCompress7ZSeparate, .encryptCompressZIPSeparate,
-             .compress7ZDeleteOriginals, .compressZIPDeleteOriginals,
-             .compress7ZSeparateDeleteOriginals, .compressZIPSeparateDeleteOriginals,
-             .customCompression,
-             .extractArchive, .extractArchiveSeparate,
-             .extractArchiveDeleteOriginal, .extractArchiveSeparateDeleteOriginal:
-            try requestHostAction(.archive, targetedURL: targetedURL(), argument: tool.rawValue)
-            return false
         case .toggleHidden:
             try FileOperations.toggleHidden(urls)
         case .openTerminal:
@@ -767,16 +733,11 @@ final class FinderSync: FIFinderSync {
         }
     }
 
-    private func requestHostAction(
-        _ action: FinderHostAction,
-        targetedURL: URL?,
-        argument: String? = nil
-    ) throws {
+    private func requestHostAction(_ action: FinderHostAction, targetedURL: URL?) throws {
         let request = FinderActionRequest(
             action: action,
             selectedURLs: selectedURLs(),
-            targetedURL: targetedURL,
-            argument: argument
+            targetedURL: targetedURL
         )
         guard let url = request.url, NSWorkspace.shared.open(url) else {
             throw FileOperationError.applicationNotFound(L10n.text("灵犀右键"))

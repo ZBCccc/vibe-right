@@ -2,7 +2,7 @@
 
 一个原生 macOS Finder 扩展，为 Finder 右键菜单补充新建文件、复制/移动到常用目录、路径与文件信息、隐藏切换、图片转换和“用应用打开”等高频能力。
 
-项目不依赖第三方库，也不复制“超级右键”的代码和素材。宿主应用使用 AppKit，右键菜单使用 Apple 官方 Finder Sync Extension。
+项目不复制“超级右键”的代码和素材。宿主应用使用 AppKit，右键菜单使用 Apple 官方 Finder Sync Extension；WebP 编码器的许可和可复现来源见第三方声明。
 
 ## 当前功能
 
@@ -13,7 +13,7 @@
 - 独立维护常用目录，并可从 Finder 直接添加
 - 复制名称、复制路径，计算 MD5/SHA-1/SHA-256/SHA-512
 - AirDrop、解散文件夹、设置墙纸和补充所有者写权限
-- 桌面快捷方式、带确认的彻底删除、ZIP/7z 压缩与解压
+- 桌面快捷方式和带确认的彻底删除
 - 隐藏或取消隐藏已选/当前目录文件，切换扩展名显示
 - 根据所选项目路径离线生成可扫描的 PNG 二维码
 - 在任意支持 macOS 服务的应用中，对选中文本调用百度翻译、谷歌翻译或生成二维码
@@ -56,6 +56,7 @@ killall Finder
 
 WPS 二进制模板的生成方式、校验摘要和隐私检查见 [`docs/BUILT_IN_TEMPLATES.md`](docs/BUILT_IN_TEMPLATES.md)。
 多语言资源、运行时切换与完整性约束见 [`docs/LOCALIZATION.md`](docs/LOCALIZATION.md)。
+内置 WebP 编码器的版本、来源和可复现构建方式见 [`docs/THIRD_PARTY_TOOLS.md`](docs/THIRD_PARTY_TOOLS.md)。
 
 默认配置保存在：
 
@@ -73,4 +74,4 @@ Finder Sync、Core Graphics 事件监听和 AppKit 菜单均使用 Apple 公共 
 
 本项目采用 [MIT License](LICENSE)。
 
-应用同时随附独立许可的 7-Zip 命令行程序，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+应用同时随附独立许可的 libwebp 代码，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

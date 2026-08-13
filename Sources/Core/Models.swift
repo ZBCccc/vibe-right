@@ -188,24 +188,7 @@ enum ToolActionID: String, Codable, CaseIterable {
     case repairFilename
     case generateQRCode
     case permanentDelete
-    case compress7Z
-    case compressZIP
-    case compress7ZSeparate
-    case compressZIPSeparate
-    case encryptCompress7Z
-    case encryptCompressZIP
-    case encryptCompress7ZSeparate
-    case encryptCompressZIPSeparate
-    case compress7ZDeleteOriginals
-    case compressZIPDeleteOriginals
-    case compress7ZSeparateDeleteOriginals
-    case compressZIPSeparateDeleteOriginals
-    case customCompression
-    case extractArchive
-    case extractArchiveSeparate
-    case extractArchiveDeleteOriginal
-    case extractArchiveSeparateDeleteOriginal
-    // Retained only so version 1-3 configuration files remain decodable.
+    // Retained only to migrate version 1-3 configuration files.
     case toggleHidden
     case openTerminal
     case openWarp
@@ -243,23 +226,6 @@ enum ToolActionID: String, Codable, CaseIterable {
         case .repairFilename: key = "修复乱码文件名"
         case .generateQRCode: key = "根据路径生成二维码"
         case .permanentDelete: key = "彻底删除"
-        case .compress7Z: key = "压缩为 7z"
-        case .compressZIP: key = "压缩为 ZIP"
-        case .compress7ZSeparate: key = "分别压缩为 7z"
-        case .compressZIPSeparate: key = "分别压缩为 ZIP"
-        case .encryptCompress7Z: key = "加密压缩为 7z"
-        case .encryptCompressZIP: key = "加密压缩为 ZIP"
-        case .encryptCompress7ZSeparate: key = "分别加密压缩为 7z"
-        case .encryptCompressZIPSeparate: key = "分别加密压缩为 ZIP"
-        case .compress7ZDeleteOriginals: key = "压缩为 7z 并删除原文件"
-        case .compressZIPDeleteOriginals: key = "压缩为 ZIP 并删除原文件"
-        case .compress7ZSeparateDeleteOriginals: key = "分别压缩为 7z 并删除原文件"
-        case .compressZIPSeparateDeleteOriginals: key = "分别压缩为 ZIP 并删除原文件"
-        case .customCompression: key = "自定义压缩…"
-        case .extractArchive: key = "解压到当前文件夹"
-        case .extractArchiveSeparate: key = "解压到单独文件夹"
-        case .extractArchiveDeleteOriginal: key = "解压到当前文件夹并删除原压缩包"
-        case .extractArchiveSeparateDeleteOriginal: key = "解压到单独文件夹并删除原压缩包"
         case .toggleHidden: key = "隐藏/取消隐藏"
         case .openTerminal: key = "进入终端"
         case .openWarp: key = "进入 Warp"
@@ -297,17 +263,6 @@ enum ToolActionID: String, Codable, CaseIterable {
         case .repairFilename: return "textformat.abc.dottedunderline"
         case .generateQRCode: return "qrcode"
         case .permanentDelete: return "trash.slash"
-        case .compress7Z, .compressZIP, .compress7ZSeparate, .compressZIPSeparate:
-            return "archivebox"
-        case .encryptCompress7Z, .encryptCompressZIP, .encryptCompress7ZSeparate, .encryptCompressZIPSeparate:
-            return "lock.doc"
-        case .compress7ZDeleteOriginals, .compressZIPDeleteOriginals,
-             .compress7ZSeparateDeleteOriginals, .compressZIPSeparateDeleteOriginals:
-            return "archivebox.fill"
-        case .customCompression: return "slider.horizontal.3"
-        case .extractArchive, .extractArchiveSeparate,
-             .extractArchiveDeleteOriginal, .extractArchiveSeparateDeleteOriginal:
-            return "archivebox.fill"
         case .toggleHidden: return "eye.slash"
         case .openTerminal: return "terminal"
         case .openWarp: return "terminal.fill"
@@ -340,23 +295,6 @@ enum ToolActionID: String, Codable, CaseIterable {
         .repairFilename,
         .generateQRCode,
         .permanentDelete,
-        .compress7Z,
-        .compressZIP,
-        .compress7ZSeparate,
-        .compressZIPSeparate,
-        .encryptCompress7Z,
-        .encryptCompressZIP,
-        .encryptCompress7ZSeparate,
-        .encryptCompressZIPSeparate,
-        .compress7ZDeleteOriginals,
-        .compressZIPDeleteOriginals,
-        .compress7ZSeparateDeleteOriginals,
-        .compressZIPSeparateDeleteOriginals,
-        .customCompression,
-        .extractArchive,
-        .extractArchiveSeparate,
-        .extractArchiveDeleteOriginal,
-        .extractArchiveSeparateDeleteOriginal,
         .convertWebP,
         .convertHEIC,
         .convertPNG,
@@ -366,20 +304,7 @@ enum ToolActionID: String, Codable, CaseIterable {
         .makeIOSIconSet
     ]
 
-    static let defaultEnabledCases: Set<ToolActionID> = Set(settingsCases).subtracting([
-        .compress7ZSeparate,
-        .compressZIPSeparate,
-        .encryptCompress7Z,
-        .encryptCompressZIP,
-        .encryptCompress7ZSeparate,
-        .encryptCompressZIPSeparate,
-        .compress7ZDeleteOriginals,
-        .compressZIPDeleteOriginals,
-        .compress7ZSeparateDeleteOriginals,
-        .compressZIPSeparateDeleteOriginals,
-        .extractArchiveDeleteOriginal,
-        .extractArchiveSeparateDeleteOriginal
-    ])
+    static let defaultEnabledCases: Set<ToolActionID> = Set(settingsCases)
 }
 
 struct AppConfig: Codable, Equatable {
@@ -480,7 +405,7 @@ struct AppConfig: Codable, Equatable {
     ]
 
     static let defaults = AppConfig(
-        schemaVersion: 24,
+        schemaVersion: 25,
         language: .system,
         templates: defaultTemplates,
         destinations: defaultDestinations,
@@ -627,8 +552,11 @@ struct AppConfig: Codable, Equatable {
         applications = try values.decodeIfPresent([ExternalApplication].self, forKey: .applications) ?? []
         enabledIconPresets = try values.decodeIfPresent(Set<FileIconPreset>.self, forKey: .enabledIconPresets) ?? Set(FileIconPreset.allCases)
         customIcons = try values.decodeIfPresent([CustomFileIcon].self, forKey: .customIcons) ?? []
-        enabledTools = try values.decodeIfPresent(Set<ToolActionID>.self, forKey: .enabledTools) ?? ToolActionID.defaultEnabledCases
-        toolOrder = (try? values.decode([ToolActionID].self, forKey: .toolOrder)) ?? ToolActionID.settingsCases
+        let enabledToolIDs = try values.decodeIfPresent(Set<String>.self, forKey: .enabledTools)
+        enabledTools = enabledToolIDs.map { Set($0.compactMap(ToolActionID.init(rawValue:))) }
+            ?? ToolActionID.defaultEnabledCases
+        let orderedToolIDs = try? values.decode([String].self, forKey: .toolOrder)
+        toolOrder = orderedToolIDs?.compactMap(ToolActionID.init(rawValue:)) ?? ToolActionID.settingsCases
         toolCustomTitles = try values.decodeIfPresent([String: String].self, forKey: .toolCustomTitles) ?? [:]
         showIcons = try values.decodeIfPresent(Bool.self, forKey: .showIcons) ?? true
         showMenuBarIcon = try values.decodeIfPresent(Bool.self, forKey: .showMenuBarIcon) ?? true
@@ -785,8 +713,6 @@ final class ConfigStore {
             decoded.enabledTools.formUnion([
                 .createDesktopShortcut,
                 .permanentDelete,
-                .compressZIP,
-                .extractArchive,
                 .convertWebP,
                 .convertHEIC,
                 .convertICNS,
@@ -858,10 +784,6 @@ final class ConfigStore {
             decoded.toolCustomTitles = [:]
             decoded.schemaVersion = 17
         }
-        if schemaVersion < 18 {
-            decoded.enabledTools.insert(.compress7Z)
-            decoded.schemaVersion = 18
-        }
         if schemaVersion < 19 {
             for template in AppConfig.defaultTemplates where ["wps", "et", "dps"].contains(template.id) {
                 if !decoded.templates.contains(where: { $0.id == template.id }) {
@@ -896,11 +818,11 @@ final class ConfigStore {
             }
             decoded.schemaVersion = 23
         }
-        if schemaVersion < 24 {
-            decoded.enabledTools.formUnion([.customCompression, .extractArchiveSeparate])
-            decoded.schemaVersion = 24
+        if schemaVersion < 25 {
+            decoded.schemaVersion = 25
         }
         let supportedTools = Set(ToolActionID.settingsCases)
+        decoded.enabledTools.formIntersection(supportedTools)
         var seenTools = Set<ToolActionID>()
         decoded.toolOrder = decoded.toolOrder.filter {
             supportedTools.contains($0) && seenTools.insert($0).inserted

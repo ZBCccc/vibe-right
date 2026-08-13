@@ -6,7 +6,6 @@ enum FinderHostAction: String, Equatable, CaseIterable {
     case moveToCustomDestination = "move-to-custom-destination"
     case repairFilename = "repair-filename"
     case confirmPermanentDelete = "confirm-permanent-delete"
-    case archive
 }
 
 struct FinderActionRequest: Equatable {
@@ -16,18 +15,15 @@ struct FinderActionRequest: Equatable {
     var action: FinderHostAction
     var selectedURLs: [URL]
     var targetedURL: URL?
-    var argument: String?
 
     init(
         action: FinderHostAction,
         selectedURLs: [URL],
-        targetedURL: URL?,
-        argument: String? = nil
+        targetedURL: URL?
     ) {
         self.action = action
         self.selectedURLs = selectedURLs.map(\.standardizedFileURL)
         self.targetedURL = targetedURL?.standardizedFileURL
-        self.argument = argument
     }
 
     init?(url: URL) {
@@ -54,8 +50,7 @@ struct FinderActionRequest: Equatable {
         self.init(
             action: action,
             selectedURLs: selectedURLs,
-            targetedURL: targetedURL,
-            argument: items.first(where: { $0.name == "argument" })?.value
+            targetedURL: targetedURL
         )
     }
 
@@ -66,9 +61,6 @@ struct FinderActionRequest: Equatable {
         components.queryItems = [URLQueryItem(name: "action", value: action.rawValue)]
         if let targetedURL {
             components.queryItems?.append(URLQueryItem(name: "target", value: targetedURL.path))
-        }
-        if let argument {
-            components.queryItems?.append(URLQueryItem(name: "argument", value: argument))
         }
         components.queryItems?.append(contentsOf: selectedURLs.map {
             URLQueryItem(name: "selected", value: $0.path)

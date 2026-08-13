@@ -530,6 +530,28 @@ struct CoreTests {
         precondition(version22Migrated.config.threeFingerTapEnabled)
         precondition(version22Migrated.config.templates.map(\.id) == ["custom"])
 
+        let version24ConfigURL = root.appendingPathComponent("version-24-config.json")
+        let version24Config = """
+        {
+          "schemaVersion": 24,
+          "templates": [],
+          "destinations": [],
+          "enabledTools": ["copyPath", "compress7Z", "customCompression"],
+          "toolOrder": ["compress7Z", "copyPath", "customCompression"],
+          "toolCustomTitles": {
+            "copyPath": "复制完整路径",
+            "compress7Z": "旧压缩入口"
+          }
+        }
+        """
+        try Data(version24Config.utf8).write(to: version24ConfigURL)
+        let version24Migrated = ConfigStore(configURL: version24ConfigURL)
+        precondition(version24Migrated.config.schemaVersion == AppConfig.defaults.schemaVersion)
+        precondition(version24Migrated.config.enabledTools == [.copyPath])
+        precondition(version24Migrated.config.toolOrder.first == .copyPath)
+        precondition(version24Migrated.config.toolOrder.allSatisfy(ToolActionID.settingsCases.contains))
+        precondition(version24Migrated.config.toolCustomTitles == ["copyPath": "复制完整路径"])
+
         let localizedConfigURL = root.appendingPathComponent("localized-config.json")
         let localizedStore = ConfigStore(configURL: localizedConfigURL)
         try localizedStore.update { $0.language = .japanese }
@@ -561,26 +583,30 @@ struct CoreTests {
         precondition(TerminalAutomation.serviceName(for: .iTerm2, mode: .window) == "New iTerm2 Window Here")
         precondition(TerminalAutomation.serviceName(for: .iTerm2, mode: .tab) == "New iTerm2 Tab Here")
 
+        let finderSelectedURL = automationDirectory.appendingPathComponent("selected & quoted.txt")
+        try Data("selected".utf8).write(to: finderSelectedURL)
         let finderActionRequest = FinderActionRequest(
-            action: .createCustomFile,
-            selectedURLs: [automationDirectory.appendingPathComponent("selected & quoted.txt")],
+            action: .repairFilename,
+            selectedURLs: [finderSelectedURL],
             targetedURL: automationDirectory
         )
-        let finderActionURL = finderActionRequest.url
-        precondition(finderActionURL != nil)
-        precondition(FinderActionRequest(url: finderActionURL!) == finderActionRequest)
+        guard let finderActionURL = finderActionRequest.url else {
+            preconditionFailure("Finder action URL should be created")
+        }
+        precondition(FinderActionRequest(url: finderActionURL) == finderActionRequest)
         for action in FinderHostAction.allCases {
             let request = FinderActionRequest(
                 action: action,
-                selectedURLs: [automationDirectory.appendingPathComponent("selected & quoted.txt")],
-                targetedURL: automationDirectory,
-                argument: action == .archive ? ToolActionID.customCompression.rawValue : nil
+                selectedURLs: [finderSelectedURL],
+                targetedURL: automationDirectory
             )
-            guard let url = request.url else { preconditionFailure("Finder action URL should be generated") }
+            guard let url = request.url else {
+                preconditionFailure("Finder action URL should be created for \(action.rawValue)")
+            }
             precondition(FinderActionRequest(url: url) == request)
         }
-        precondition(FinderActionRequest(url: URL(string: "viberight://finder-action?action=unknown&target=/tmp")!) == nil)
-        precondition(FinderActionRequest(url: URL(string: "viberight://finder-action?action=create-custom-file")!) == nil)
+        precondition(FinderActionRequest(url: URL(string: "viberight://finder-action?action=unknown&selected=/tmp/a")!) == nil)
+        precondition(FinderActionRequest(url: URL(string: "viberight://finder-action?action=repair-filename")!) == nil)
 
         let hiddenFile = root.appendingPathComponent("visibility.txt")
         try Data("visible".utf8).write(to: hiddenFile)
@@ -622,91 +648,6 @@ struct CoreTests {
         precondition(shortcuts.count == 1)
         let shortcutDestination = try FileManager.default.destinationOfSymbolicLink(atPath: shortcuts[0].path)
         precondition(URL(fileURLWithPath: shortcutDestination).standardizedFileURL == first.standardizedFileURL)
-
-        let archiveParent = root.appendingPathComponent("archive-parent", isDirectory: true)
-        try FileManager.default.createDirectory(at: archiveParent, withIntermediateDirectories: true)
-        let archiveA = archiveParent.appendingPathComponent("a.txt")
-        let archiveB = archiveParent.appendingPathComponent("b.txt")
-        try Data("A".utf8).write(to: archiveA)
-        try Data("B".utf8).write(to: archiveB)
-        let archive = try FileOperations.createZIP(from: [archiveA, archiveB])
-        precondition(FileManager.default.fileExists(atPath: archive.path))
-        let extracted = try FileOperations.extractArchives([archive])
-        precondition(extracted.count == 1)
-        precondition(FileManager.default.fileExists(atPath: extracted[0].appendingPathComponent("a.txt").path))
-        precondition(FileManager.default.fileExists(atPath: extracted[0].appendingPathComponent("b.txt").path))
-
-        let sevenZipArchive = try FileOperations.create7Z(from: [archiveA, archiveB])
-        precondition(FileManager.default.fileExists(atPath: sevenZipArchive.path))
-        let sevenZipExtracted = try FileOperations.extractArchives([sevenZipArchive])
-        precondition(sevenZipExtracted.count == 1)
-        let sevenZipA = try Data(contentsOf: sevenZipExtracted[0].appendingPathComponent("a.txt"))
-        let sevenZipB = try Data(contentsOf: sevenZipExtracted[0].appendingPathComponent("b.txt"))
-        precondition(String(data: sevenZipA, encoding: .utf8) == "A")
-        precondition(String(data: sevenZipB, encoding: .utf8) == "B")
-
-        let separateSourceDirectory = root.appendingPathComponent("separate-archives", isDirectory: true)
-        try FileManager.default.createDirectory(at: separateSourceDirectory, withIntermediateDirectories: true)
-        let separateA = separateSourceDirectory.appendingPathComponent("alpha.txt")
-        let separateB = separateSourceDirectory.appendingPathComponent("beta.txt")
-        try Data("alpha".utf8).write(to: separateA)
-        try Data("beta".utf8).write(to: separateB)
-        let separateArchives = try FileOperations.createArchives(
-            from: [separateA, separateB],
-            options: ArchiveCompressionOptions(format: .zip, separateArchives: true)
-        )
-        precondition(separateArchives.map(\.lastPathComponent) == ["alpha.txt.zip", "beta.txt.zip"])
-        precondition(separateArchives.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
-
-        let passwordSource = separateSourceDirectory.appendingPathComponent("confidential.txt")
-        try Data("classified".utf8).write(to: passwordSource)
-        let encryptedArchives = try FileOperations.createArchives(
-            from: [passwordSource],
-            options: ArchiveCompressionOptions(format: .sevenZip, password: "pass phrase")
-        )
-        precondition(encryptedArchives.count == 1)
-        do {
-            _ = try FileOperations.extractArchives(encryptedArchives)
-            preconditionFailure("Encrypted archive should require a password")
-        } catch FileOperationError.archivePasswordRequired {
-            // Expected.
-        }
-        do {
-            _ = try FileOperations.extractArchives(
-                encryptedArchives,
-                options: ArchiveExtractionOptions(password: "wrong password")
-            )
-            preconditionFailure("Incorrect archive password should fail")
-        } catch FileOperationError.invalidArchivePassword {
-            // Expected.
-        }
-        let encryptedExtracted = try FileOperations.extractArchives(
-            encryptedArchives,
-            options: ArchiveExtractionOptions(password: "pass phrase")
-        )
-        let encryptedContents = try Data(
-            contentsOf: encryptedExtracted[0].appendingPathComponent("confidential.txt")
-        )
-        precondition(String(data: encryptedContents, encoding: .utf8) == "classified")
-
-        let deleteSourceDirectory = root.appendingPathComponent("archive-delete-source", isDirectory: true)
-        try FileManager.default.createDirectory(at: deleteSourceDirectory, withIntermediateDirectories: true)
-        let deleteSource = deleteSourceDirectory.appendingPathComponent("remove-after-archive.txt")
-        try Data("delete after verification".utf8).write(to: deleteSource)
-        let deleteArchive = try FileOperations.createArchives(
-            from: [deleteSource],
-            options: ArchiveCompressionOptions(format: .zip, deleteOriginals: true)
-        )
-        precondition(!FileManager.default.fileExists(atPath: deleteSource.path))
-        precondition(FileManager.default.fileExists(atPath: deleteArchive[0].path))
-        let currentFolderResults = try FileOperations.extractArchives(
-            deleteArchive,
-            options: ArchiveExtractionOptions(destination: .currentFolder, deleteArchives: true)
-        )
-        precondition(!FileManager.default.fileExists(atPath: deleteArchive[0].path))
-        precondition(currentFolderResults.contains(where: { $0.lastPathComponent == "remove-after-archive.txt" }))
-        let currentFolderContents = try Data(contentsOf: currentFolderResults[0])
-        precondition(currentFolderContents == Data("delete after verification".utf8))
 
         let disposable = root.appendingPathComponent("delete-me.txt")
         try Data("delete".utf8).write(to: disposable)
@@ -784,10 +725,15 @@ struct CoreTests {
         precondition(FileManager.default.fileExists(atPath: root.appendingPathComponent("pixel.icns").path))
         try FileOperations.convertImagesToHEIC([imageURL])
         precondition(FileManager.default.fileExists(atPath: root.appendingPathComponent("pixel.heic").path))
-        if FileManager.default.isExecutableFile(atPath: "/opt/homebrew/bin/cwebp") {
-            try FileOperations.convertImagesToWebP([imageURL])
-            precondition(FileManager.default.fileExists(atPath: root.appendingPathComponent("pixel.webp").path))
-        }
+        try FileOperations.convertImagesToWebP([imageURL])
+        let webPURL = root.appendingPathComponent("pixel.webp")
+        let webPData = try Data(contentsOf: webPURL)
+        precondition(webPData.count >= 12)
+        precondition(String(data: webPData.prefix(4), encoding: .ascii) == "RIFF")
+        precondition(String(data: webPData.dropFirst(8).prefix(4), encoding: .ascii) == "WEBP")
+        let webPImage = NSImage(contentsOf: webPURL)
+        precondition(webPImage?.representations.first?.pixelsWide == 1)
+        precondition(webPImage?.representations.first?.pixelsHigh == 1)
 
         let iconTarget = root.appendingPathComponent("icon-target.txt")
         try Data("icon".utf8).write(to: iconTarget)

@@ -6,6 +6,7 @@ BUILD_DIR="$ROOT_DIR/.build"
 DIST_DIR="$ROOT_DIR/dist"
 APP_DIR="$DIST_DIR/灵犀右键.app"
 EXT_DIR="$APP_DIR/Contents/PlugIns/灵犀右键 Finder 扩展.appex"
+BUILD_TARGET="$(uname -m)-apple-macos13.0"
 
 rm -rf "$BUILD_DIR" "$DIST_DIR"
 mkdir -p "$BUILD_DIR" \
@@ -16,6 +17,7 @@ mkdir -p "$BUILD_DIR" \
 
 swiftc \
   -swift-version 5 \
+  -target "$BUILD_TARGET" \
   -O \
   -module-name VibeRight \
   -framework AppKit \
@@ -30,20 +32,22 @@ swiftc \
   "$ROOT_DIR/Sources/Core/FileOperations.swift" \
   "$ROOT_DIR/Sources/Core/TerminalAutomation.swift" \
   "$ROOT_DIR/Sources/Core/TextServices.swift" \
+  "$ROOT_DIR/Sources/App/FinderActionCoordinator.swift" \
   "$ROOT_DIR/Sources/FinderExtension/FinderSync.swift" \
   "$ROOT_DIR/Sources/App/Main.swift" \
   "$ROOT_DIR/Sources/App/AlternateMenuTriggerController.swift" \
-  "$ROOT_DIR/Sources/App/FinderActionCoordinator.swift" \
   "$ROOT_DIR/Sources/App/MainWindowController.swift" \
   -o "$APP_DIR/Contents/MacOS/VibeRight"
 
 clang \
+  -target "$BUILD_TARGET" \
   -fmodules \
   -c "$ROOT_DIR/Sources/FinderExtension/ExtensionMain.m" \
   -o "$BUILD_DIR/ExtensionMain.o"
 
 swiftc \
   -swift-version 5 \
+  -target "$BUILD_TARGET" \
   -O \
   -parse-as-library \
   -module-name VibeRightFinderExtension \
@@ -71,7 +75,18 @@ cp -RX "$ROOT_DIR/Resources/Localization.bundle" "$EXT_DIR/Contents/Resources/"
 cp -RX "$ROOT_DIR/Resources/AppLocalizations/." "$APP_DIR/Contents/Resources/"
 cp -RX "$ROOT_DIR/Resources/Tools" "$APP_DIR/Contents/Resources/"
 cp -RX "$ROOT_DIR/Resources/ThirdParty" "$APP_DIR/Contents/Resources/"
-chmod 755 "$APP_DIR/Contents/Resources/Tools/7zz"
+mkdir -p "$EXT_DIR/Contents/Resources/Tools"
+TOOL_PATH="$APP_DIR/Contents/Resources/Tools/webp-encoder"
+[[ -x "$TOOL_PATH" ]] || { echo "Missing bundled tool: $TOOL_PATH" >&2; exit 1; }
+chmod 755 "$TOOL_PATH"
+codesign --force --sign - "$TOOL_PATH"
+
+EXT_TOOL_PATH="$EXT_DIR/Contents/Resources/Tools/webp-encoder"
+cp "$ROOT_DIR/Resources/Tools/webp-encoder" "$EXT_TOOL_PATH"
+chmod 755 "$EXT_TOOL_PATH"
+codesign --force --sign - \
+  --entitlements "$ROOT_DIR/Resources/ExtensionTool.entitlements" \
+  "$EXT_TOOL_PATH"
 
 plutil -lint "$APP_DIR/Contents/Info.plist" "$EXT_DIR/Contents/Info.plist"
 codesign --force --sign - --entitlements "$ROOT_DIR/Resources/Extension.entitlements" "$EXT_DIR"

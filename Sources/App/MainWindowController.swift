@@ -1256,25 +1256,6 @@ final class MainViewController: NSViewController {
         case .repairFilename: return "高置信度识别乱码，预览确认后再重命名"
         case .generateQRCode: return "把所选项目的绝对路径生成离线 PNG 二维码"
         case .permanentDelete: return "绕过废纸篓删除，默认必须二次确认"
-        case .compress7Z, .compressZIP:
-            return "使用内置 7-Zip 归档引擎创建压缩包"
-        case .compress7ZSeparate, .compressZIPSeparate:
-            return "为每个所选项目分别创建压缩包"
-        case .encryptCompress7Z, .encryptCompressZIP:
-            return "使用 AES-256 加密压缩包"
-        case .encryptCompress7ZSeparate, .encryptCompressZIPSeparate:
-            return "分别创建 AES-256 加密压缩包"
-        case .compress7ZDeleteOriginals, .compressZIPDeleteOriginals,
-             .compress7ZSeparateDeleteOriginals, .compressZIPSeparateDeleteOriginals:
-            return "通过完整性校验后删除原文件"
-        case .customCompression:
-            return "选择格式、归档方式和可选加密密码。"
-        case .extractArchive:
-            return "安全解压到当前文件夹"
-        case .extractArchiveSeparate:
-            return "安全解压到同名独立文件夹"
-        case .extractArchiveDeleteOriginal, .extractArchiveSeparateDeleteOriginal:
-            return "安全解压后删除原压缩包"
         case .toggleHidden: return "切换 Finder 隐藏属性"
         case .openTerminal: return "在系统终端打开目录"
         case .openWarp: return "使用 Warp 打开目录"
@@ -1284,7 +1265,7 @@ final class MainViewController: NSViewController {
         case .openGoLand: return "使用 GoLand 打开目录"
         case .convertPNG: return "旁路生成 PNG，不覆盖原图"
         case .convertJPEG: return "以 90% 质量生成 JPEG"
-        case .convertWebP: return "使用可用的 cwebp 旁路生成 WebP"
+        case .convertWebP: return "使用内置 WebP 编码器旁路生成 WebP"
         case .convertHEIC: return "使用 macOS 图像服务生成 HEIC"
         case .convertICNS: return "生成包含标准尺寸的 ICNS"
         case .makeMacIconSet: return "生成完整 macOS .iconset 目录"
