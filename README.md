@@ -6,12 +6,19 @@
 
 ## 当前功能
 
-- 在 Finder 空白处新建 TXT、Markdown、JSON、Swift 文件或文件夹
-- 将选中文件复制/移动到下载、文稿、图片等常用目录
-- 复制名称、复制路径、计算 MD5/SHA-256
-- 隐藏或取消隐藏文件
+- 在 Finder 空白处新建 TXT、RTF、XML、DOCX、XLSX、PPTX、Markdown、JSON、Swift 文件或文件夹
+- 导入任意现成文件作为自定义新建模板
+- 使用原创内置图标或导入图片设置文件、文件夹图标，并可恢复默认
+- 将选中文件复制/移动到预设目录或临时选择的自定义目录
+- 独立维护常用目录，并可从 Finder 直接添加
+- 复制名称、复制路径，计算 MD5/SHA-1/SHA-256/SHA-512
+- AirDrop、解散文件夹、设置墙纸和补充所有者写权限
+- 桌面快捷方式、带确认的彻底删除、ZIP 压缩与解压
+- 隐藏或取消隐藏已选/当前目录文件，切换扩展名显示
 - 在系统终端、Warp、iTerm2、Visual Studio Code、Cursor、GoLand 中打开目录
+- 可从 `/Applications` 添加任意 macOS 应用作为“进入应用”动作
 - 将图片转换为 PNG 或 JPEG
+- 将图片转换为 WebP、HEIC、ICNS，生成 macOS/iOS 图标集
 - 配置中心实时启停模板、目标目录和工具项
 - 菜单栏入口、Finder 工具栏入口、扩展状态与系统管理入口
 

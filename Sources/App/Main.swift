@@ -22,8 +22,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         ConfigStore.shared.reload()
-        installStatusItem()
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(configChanged),
+            name: Notification.Name("com.vibecoding.VibeRight.configChanged"),
+            object: nil
+        )
+        updateStatusItemVisibility()
         showSettings()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        DistributedNotificationCenter.default().removeObserver(self)
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -35,7 +45,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showSettings()
     }
 
-    private func installStatusItem() {
+    @objc private func configChanged() {
+        ConfigStore.shared.reload()
+        updateStatusItemVisibility()
+    }
+
+    private func updateStatusItemVisibility() {
+        guard ConfigStore.shared.config.showMenuBarIcon else {
+            if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
+            statusItem = nil
+            return
+        }
+        guard statusItem == nil else { return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = NSImage(systemSymbolName: "cursorarrow.click.2", accessibilityDescription: "灵犀右键")
         item.button?.toolTip = "灵犀右键"
