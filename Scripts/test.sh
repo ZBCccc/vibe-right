@@ -11,6 +11,7 @@ swiftc \
   -framework CoreImage \
   "$ROOT_DIR/Sources/Core/Localization.swift" \
   "$ROOT_DIR/Sources/Core/Models.swift" \
+  "$ROOT_DIR/Sources/Core/FinderActionRequest.swift" \
   "$ROOT_DIR/Sources/Core/FinderContext.swift" \
   "$ROOT_DIR/Sources/Core/FinderScope.swift" \
   "$ROOT_DIR/Sources/Core/FileOperations.swift" \

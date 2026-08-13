@@ -18,6 +18,33 @@ struct CoreTests {
         let firstContents = try Data(contentsOf: first)
         precondition(String(data: firstContents, encoding: .utf8) == "{}\n")
 
+        let custom = try FileOperations.createCustomFile(
+            named: "  发布说明  ",
+            fileExtension: " .tar.gz ",
+            in: root
+        )
+        let duplicateCustom = try FileOperations.createCustomFile(
+            named: "发布说明",
+            fileExtension: "tar.gz",
+            in: root
+        )
+        precondition(custom.lastPathComponent == "发布说明.tar.gz")
+        precondition(duplicateCustom.lastPathComponent == "发布说明 2.tar.gz")
+        let createdCustomData = try Data(contentsOf: custom)
+        precondition(createdCustomData.isEmpty)
+        do {
+            _ = try FileOperations.createCustomFile(named: "../越界", fileExtension: "txt", in: root)
+            preconditionFailure("Invalid custom file name should fail")
+        } catch FileOperationError.invalidCustomFileName {
+            // Expected.
+        }
+        do {
+            _ = try FileOperations.createCustomFile(named: "文件", fileExtension: "../txt", in: root)
+            preconditionFailure("Invalid custom file extension should fail")
+        } catch FileOperationError.invalidCustomFileExtension {
+            // Expected.
+        }
+
         let rtfTemplate = FileTemplate(id: "rtf", name: "RTF", fileExtension: "rtf", enabled: true, isDirectory: false)
         let xmlTemplate = FileTemplate(id: "xml", name: "XML", fileExtension: "xml", enabled: true, isDirectory: false)
         let rtf = try FileOperations.create(template: rtfTemplate, in: root)
@@ -261,6 +288,8 @@ struct CoreTests {
         precondition(AppConfig.defaultApplications.contains(where: { $0.id == "android-studio" }))
         precondition(AppConfig.defaultApplications.contains(where: { $0.id == "rubymine" }))
         precondition(Set(AppConfig.defaultTemplates.map(\.id)).isSuperset(of: ["wps", "et", "dps"]))
+        precondition(AppConfig.defaultTemplates.first?.id == "custom")
+        precondition(AppConfig.defaultTemplates.first?.enabled == true)
         precondition(AppConfig.defaultTemplates.first(where: { $0.id == "ai" })?.enabled == false)
         precondition(AppConfig.defaultTemplates.first(where: { $0.id == "psd" })?.enabled == false)
 
@@ -477,6 +506,29 @@ struct CoreTests {
         precondition(version21Migrated.config.modifierRightClickModifier == .shift)
         precondition(!version21Migrated.config.middleClickEnabled)
         precondition(!version21Migrated.config.threeFingerTapEnabled)
+        precondition(version21Migrated.config.templates.first?.id == "custom")
+        precondition(version21Migrated.config.templates.filter { $0.id == "custom" }.count == 1)
+
+        let version22ConfigURL = root.appendingPathComponent("version-22-config.json")
+        let version22Config = """
+        {
+          "schemaVersion": 22,
+          "templates": [],
+          "destinations": [],
+          "modifierRightClickEnabled": true,
+          "modifierRightClickModifier": "command",
+          "middleClickEnabled": true,
+          "threeFingerTapEnabled": true
+        }
+        """
+        try Data(version22Config.utf8).write(to: version22ConfigURL)
+        let version22Migrated = ConfigStore(configURL: version22ConfigURL)
+        precondition(version22Migrated.config.schemaVersion == AppConfig.defaults.schemaVersion)
+        precondition(version22Migrated.config.modifierRightClickEnabled)
+        precondition(version22Migrated.config.modifierRightClickModifier == .command)
+        precondition(version22Migrated.config.middleClickEnabled)
+        precondition(version22Migrated.config.threeFingerTapEnabled)
+        precondition(version22Migrated.config.templates.map(\.id) == ["custom"])
 
         let localizedConfigURL = root.appendingPathComponent("localized-config.json")
         let localizedStore = ConfigStore(configURL: localizedConfigURL)
@@ -508,6 +560,17 @@ struct CoreTests {
         precondition(TerminalAutomation.parseRequestURL(iTermURL!) == iTermRequest)
         precondition(TerminalAutomation.serviceName(for: .iTerm2, mode: .window) == "New iTerm2 Window Here")
         precondition(TerminalAutomation.serviceName(for: .iTerm2, mode: .tab) == "New iTerm2 Tab Here")
+
+        let finderActionRequest = FinderActionRequest(
+            action: .createCustomFile,
+            selectedURLs: [automationDirectory.appendingPathComponent("selected & quoted.txt")],
+            targetedURL: automationDirectory
+        )
+        let finderActionURL = finderActionRequest.url
+        precondition(finderActionURL != nil)
+        precondition(FinderActionRequest(url: finderActionURL!) == finderActionRequest)
+        precondition(FinderActionRequest(url: URL(string: "viberight://finder-action?action=unknown&target=/tmp")!) == nil)
+        precondition(FinderActionRequest(url: URL(string: "viberight://finder-action?action=create-custom-file")!) == nil)
 
         let hiddenFile = root.appendingPathComponent("visibility.txt")
         try Data("visible".utf8).write(to: hiddenFile)

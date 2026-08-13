@@ -370,9 +370,14 @@ final class MainViewController: NSViewController {
 
         let list = verticalStack()
         for (index, template) in store.config.templates.enumerated() {
-            let subtitle = template.isDirectory
-                ? L10n.text("目录")
-                : L10n.format(".%@ 文件", template.fileExtension)
+            let subtitle: String
+            if template.id == "custom" {
+                subtitle = L10n.text("名称和后缀在创建时输入")
+            } else if template.isDirectory {
+                subtitle = L10n.text("目录")
+            } else {
+                subtitle = L10n.format(".%@ 文件", template.fileExtension)
+            }
             let row = NSStackView()
             row.orientation = .horizontal
             row.alignment = .centerY

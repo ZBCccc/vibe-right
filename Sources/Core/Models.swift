@@ -351,6 +351,7 @@ struct AppConfig: Codable, Equatable {
     var iTermOpenMode: TerminalOpenMode
 
     static let defaultTemplates = [
+        FileTemplate(id: "custom", name: "自定义创建新文件", fileExtension: "", enabled: true, isDirectory: false),
         FileTemplate(id: "folder", name: "文件夹", fileExtension: "", enabled: true, isDirectory: true),
         FileTemplate(id: "txt", name: "TXT", fileExtension: "txt", enabled: true, isDirectory: false),
         FileTemplate(id: "rtf", name: "RTF", fileExtension: "rtf", enabled: true, isDirectory: false),
@@ -413,7 +414,7 @@ struct AppConfig: Codable, Equatable {
     ]
 
     static let defaults = AppConfig(
-        schemaVersion: 22,
+        schemaVersion: 23,
         language: .system,
         templates: defaultTemplates,
         destinations: defaultDestinations,
@@ -821,6 +822,13 @@ final class ConfigStore {
             decoded.middleClickEnabled = false
             decoded.threeFingerTapEnabled = false
             decoded.schemaVersion = 22
+        }
+        if schemaVersion < 23 {
+            if let customTemplate = AppConfig.defaultTemplates.first(where: { $0.id == "custom" }),
+               !decoded.templates.contains(where: { $0.id == customTemplate.id }) {
+                decoded.templates.insert(customTemplate, at: 0)
+            }
+            decoded.schemaVersion = 23
         }
         let supportedTools = Set(ToolActionID.settingsCases)
         var seenTools = Set<ToolActionID>()

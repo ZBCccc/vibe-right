@@ -10,6 +10,8 @@ enum FileOperationError: LocalizedError {
     case templateMissing(URL)
     case unsupportedImage(URL)
     case applicationNotFound(String)
+    case invalidCustomFileName
+    case invalidCustomFileExtension
     case processFailed(String)
 
     var errorDescription: String? {
@@ -20,6 +22,8 @@ enum FileOperationError: LocalizedError {
         case .templateMissing(let url): return L10n.format("模板文件不存在：%@", url.lastPathComponent)
         case .unsupportedImage(let url): return L10n.format("无法读取图片：%@", url.lastPathComponent)
         case .applicationNotFound(let name): return L10n.format("未安装 %@", name)
+        case .invalidCustomFileName: return L10n.text("请输入有效的文件名")
+        case .invalidCustomFileExtension: return L10n.text("请输入有效的文件后缀")
         case .processFailed(let message): return L10n.text(message)
         }
     }
@@ -51,6 +55,39 @@ enum FileOperations {
             index += 1
         }
         return url
+    }
+
+    @discardableResult
+    static func createCustomFile(
+        named name: String,
+        fileExtension: String,
+        in directory: URL
+    ) throws -> URL {
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let invalidCharacters = CharacterSet(charactersIn: "/:").union(.controlCharacters)
+        guard !cleanName.isEmpty,
+              cleanName != ".",
+              cleanName != "..",
+              cleanName.rangeOfCharacter(from: invalidCharacters) == nil else {
+            throw FileOperationError.invalidCustomFileName
+        }
+
+        let cleanExtension = fileExtension.trimmingCharacters(
+            in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "."))
+        )
+        guard cleanExtension.rangeOfCharacter(from: invalidCharacters) == nil else {
+            throw FileOperationError.invalidCustomFileExtension
+        }
+
+        let output = uniqueURL(
+            in: directory,
+            preferredName: cleanName,
+            pathExtension: cleanExtension
+        )
+        guard FileManager.default.createFile(atPath: output.path, contents: Data()) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        return output
     }
 
     @discardableResult

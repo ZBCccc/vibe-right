@@ -285,3 +285,11 @@
 "首次使用需要允许灵犀右键访问 Finder。" = "The first use requires allowing VibeRight to access Finder.";
 "鼠标中键点击" = "Middle Mouse Click";
 "鼠标入口需要辅助功能权限" = "Mouse Triggers Need Accessibility Permission";
+"自定义创建新文件" = "Create Custom File";
+"请输入有效的文件名" = "Enter a valid file name";
+"请输入有效的文件后缀" = "Enter a valid file extension";
+"名称和后缀在创建时输入" = "Enter the name and extension when creating";
+"文件名" = "File Name";
+"后缀" = "Extension";
+"输入文件名和可选后缀。" = "Enter a file name and optional extension.";
+"创建" = "Create";

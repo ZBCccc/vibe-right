@@ -285,3 +285,11 @@
 "首次使用需要允许灵犀右键访问 Finder。" = "La primera vez debes permitir que VibeRight acceda a Finder.";
 "鼠标中键点击" = "Clic central del ratón";
 "鼠标入口需要辅助功能权限" = "Los activadores del ratón necesitan Accesibilidad";
+"自定义创建新文件" = "Crear archivo personalizado";
+"请输入有效的文件名" = "Introduce un nombre de archivo válido";
+"请输入有效的文件后缀" = "Introduce una extensión de archivo válida";
+"名称和后缀在创建时输入" = "Introduce el nombre y la extensión al crear";
+"文件名" = "Nombre del archivo";
+"后缀" = "Extensión";
+"输入文件名和可选后缀。" = "Introduce un nombre de archivo y una extensión opcional.";
+"创建" = "Crear";

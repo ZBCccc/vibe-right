@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: MainWindowController?
     private var statusItem: NSStatusItem?
     private let textServiceProvider = TextServiceProvider()
+    private let finderActionCoordinator = FinderActionCoordinator()
     private var alternateMenuTriggerController: AlternateMenuTriggerController?
     private var handledLaunchAction = false
     private var launchSettingsWorkItem: DispatchWorkItem?
@@ -66,14 +67,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication, open urls: [URL]) {
         var handled = false
         for url in urls {
-            guard let request = TerminalAutomation.parseRequestURL(url) else { continue }
-            handled = true
-            handledLaunchAction = true
-            launchSettingsWorkItem?.cancel()
-            do {
-                try TerminalAutomation.run(request)
-            } catch {
-                showAutomationError(error)
+            if let request = TerminalAutomation.parseRequestURL(url) {
+                handled = true
+                handledLaunchAction = true
+                launchSettingsWorkItem?.cancel()
+                do {
+                    try TerminalAutomation.run(request)
+                } catch {
+                    showAutomationError(error)
+                }
+            } else if let request = FinderActionRequest(url: url) {
+                handled = true
+                handledLaunchAction = true
+                launchSettingsWorkItem?.cancel()
+                finderActionCoordinator.perform(request)
             }
         }
         if !handled { showSettings() }

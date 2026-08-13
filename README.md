@@ -6,7 +6,7 @@
 
 ## 当前功能
 
-- 在 Finder 空白处新建 TXT、RTF、XML、DOCX、XLSX、PPTX、WPS 文字/表格/演示、Ai、PSD、Markdown、JSON、Swift 文件或文件夹
+- 在 Finder 空白处按固定模板新建 TXT、RTF、XML、DOCX、XLSX、PPTX、WPS 文字/表格/演示、Ai、PSD、Markdown、JSON、Swift 文件或文件夹，也可临时输入名称和后缀创建任意空文件
 - 导入任意现成文件作为自定义新建模板
 - 使用原创内置图标或导入图片设置文件、文件夹图标，并可恢复默认
 - 将选中文件复制/移动到预设目录或临时选择的自定义目录

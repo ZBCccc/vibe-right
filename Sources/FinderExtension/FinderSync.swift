@@ -128,7 +128,7 @@ final class FinderSync: FIFinderSync {
         let templates = store.config.templates.filter(\.enabled)
         for template in templates where template.showInMainMenu {
             let localizedName = L10n.text(template.name)
-            let title = template.name.hasPrefix("新建")
+            let title = template.id == "custom" || template.name.hasPrefix("新建")
                 ? localizedName
                 : L10n.format("新建 %@", localizedName)
             menu.addItem(actionItem(
@@ -418,6 +418,10 @@ final class FinderSync: FIFinderSync {
             return true
         case "new":
             guard let template = store.config.templates.first(where: { $0.id == argument }) else { return false }
+            if template.id == "custom" {
+                try requestHostAction(.createCustomFile, targetedURL: try targetDirectory())
+                return false
+            }
             let url = try FileOperations.create(template: template, in: try targetDirectory())
             if store.config.autoOpenNewFile { NSWorkspace.shared.open(url) }
             return true
@@ -766,6 +770,17 @@ final class FinderSync: FIFinderSync {
         let request = TerminalLaunchRequest(application: application, mode: mode, directories: directories)
         guard let url = TerminalAutomation.requestURL(for: request), NSWorkspace.shared.open(url) else {
             throw FileOperationError.processFailed(L10n.format("无法请求 %@ 打开目录", application.displayName))
+        }
+    }
+
+    private func requestHostAction(_ action: FinderHostAction, targetedURL: URL?) throws {
+        let request = FinderActionRequest(
+            action: action,
+            selectedURLs: selectedURLs(),
+            targetedURL: targetedURL
+        )
+        guard let url = request.url, NSWorkspace.shared.open(url) else {
+            throw FileOperationError.applicationNotFound(L10n.text("灵犀右键"))
         }
     }
 
