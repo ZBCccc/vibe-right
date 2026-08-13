@@ -7,7 +7,7 @@ enum TerminalApplication: String, Codable {
 
     var displayName: String {
         switch self {
-        case .terminal: return "终端"
+        case .terminal: return L10n.text("终端")
         case .iTerm2: return "iTerm2"
         }
     }
@@ -98,7 +98,7 @@ enum TerminalAutomation {
                 pasteboard.setPropertyList([directory.path], forType: legacyFilenames)
             }
             guard NSPerformService(serviceName, pasteboard) else {
-                throw FileOperationError.processFailed("系统服务“\(serviceName)”不可用")
+                throw FileOperationError.processFailed(L10n.format("系统服务“%@”不可用", serviceName))
             }
         }
     }

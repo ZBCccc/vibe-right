@@ -47,10 +47,10 @@ final class FinderSync: FIFinderSync {
         updateDirectoryURLs()
     }
 
-    override var toolbarItemName: String { "灵犀右键" }
-    override var toolbarItemToolTip: String { "打开灵犀右键菜单" }
+    override var toolbarItemName: String { L10n.text("灵犀右键") }
+    override var toolbarItemToolTip: String { L10n.text("打开灵犀右键菜单") }
     override var toolbarItemImage: NSImage {
-        NSImage(systemSymbolName: "cursorarrow.click.2", accessibilityDescription: "灵犀右键")
+        NSImage(systemSymbolName: "cursorarrow.click.2", accessibilityDescription: L10n.text("灵犀右键"))
             ?? NSImage(size: NSSize(width: 18, height: 18))
     }
 
@@ -63,7 +63,7 @@ final class FinderSync: FIFinderSync {
         if !store.config.includeExternalVolumes, contextURLs.contains(where: FinderScope.isExternalVolume) {
             return nil
         }
-        let menu = NSMenu(title: "灵犀右键")
+        let menu = NSMenu(title: L10n.text("灵犀右键"))
         let hasSelection = !selectionURLs.isEmpty
 
         if menuKind == .contextualMenuForContainer || menuKind == .toolbarItemMenu || !hasSelection {
@@ -97,7 +97,10 @@ final class FinderSync: FIFinderSync {
     private func addNewFileItems(to menu: NSMenu) {
         let templates = store.config.templates.filter(\.enabled)
         for template in templates where template.showInMainMenu {
-            let title = template.name.hasPrefix("新建") ? template.name : "新建 \(template.name)"
+            let localizedName = L10n.text(template.name)
+            let title = template.name.hasPrefix("新建")
+                ? localizedName
+                : L10n.format("新建 %@", localizedName)
             menu.addItem(actionItem(
                 title: title,
                 symbol: template.isDirectory ? "folder.badge.plus" : "doc.badge.plus",
@@ -111,9 +114,9 @@ final class FinderSync: FIFinderSync {
     }
 
     private func newFileMenu(templates: [FileTemplate]) -> NSMenuItem {
-        let root = NSMenuItem(title: "新建文件", action: nil, keyEquivalent: "")
+        let root = NSMenuItem(title: L10n.text("新建文件"), action: nil, keyEquivalent: "")
         root.image = image("doc.badge.plus")
-        let submenu = NSMenu(title: "新建文件")
+        let submenu = NSMenu(title: L10n.text("新建文件"))
         for template in templates {
             submenu.addItem(actionItem(
                 title: template.name,
@@ -126,9 +129,10 @@ final class FinderSync: FIFinderSync {
     }
 
     private func transferMenu(title: String, action: String) -> NSMenuItem {
-        let root = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        let localizedTitle = L10n.text(title)
+        let root = NSMenuItem(title: localizedTitle, action: nil, keyEquivalent: "")
         root.image = image(action == "copy" ? "doc.on.doc" : "folder")
-        let submenu = NSMenu(title: title)
+        let submenu = NSMenu(title: localizedTitle)
         for destination in store.config.destinations where destination.enabled {
             submenu.addItem(actionItem(
                 title: destination.name,
@@ -147,9 +151,9 @@ final class FinderSync: FIFinderSync {
     }
 
     private func commonDirectoryMenu() -> NSMenuItem {
-        let root = NSMenuItem(title: "常用目录", action: nil, keyEquivalent: "")
+        let root = NSMenuItem(title: L10n.text("常用目录"), action: nil, keyEquivalent: "")
         root.image = image("heart")
-        let submenu = NSMenu(title: "常用目录")
+        let submenu = NSMenu(title: L10n.text("常用目录"))
         for destination in store.config.favorites where destination.enabled {
             submenu.addItem(actionItem(title: destination.name, symbol: "folder", payload: "open|\(destination.id)"))
         }
@@ -264,9 +268,10 @@ final class FinderSync: FIFinderSync {
             for tool in enabled { addTool(tool, to: menu) }
             return
         }
-        let root = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        let localizedTitle = L10n.text(title)
+        let root = NSMenuItem(title: localizedTitle, action: nil, keyEquivalent: "")
         root.image = image(symbol)
-        let submenu = NSMenu(title: title)
+        let submenu = NSMenu(title: localizedTitle)
         for tool in enabled { addTool(tool, to: submenu) }
         root.submenu = submenu
         menu.addItem(root)
@@ -277,7 +282,7 @@ final class FinderSync: FIFinderSync {
         let customIcons = store.config.customIcons.filter(\.enabled)
         guard !presets.isEmpty || !customIcons.isEmpty else { return }
 
-        let root = NSMenuItem(title: "文件（夹）图标", action: nil, keyEquivalent: "")
+        let root = NSMenuItem(title: L10n.text("文件（夹）图标"), action: nil, keyEquivalent: "")
         root.image = image("photo.stack")
         let submenu = NSMenu(title: root.title)
         submenu.addItem(actionItem(title: "删除自定义图标", symbol: "arrow.uturn.backward", payload: "icon|remove"))
@@ -306,7 +311,7 @@ final class FinderSync: FIFinderSync {
         guard !applications.isEmpty else { return }
         let target: NSMenu
         if store.config.mergeApplicationActions {
-            let root = NSMenuItem(title: "进入应用", action: nil, keyEquivalent: "")
+            let root = NSMenuItem(title: L10n.text("进入应用"), action: nil, keyEquivalent: "")
             root.image = image("app.badge")
             let submenu = NSMenu(title: root.title)
             root.submenu = submenu
@@ -317,7 +322,7 @@ final class FinderSync: FIFinderSync {
         }
         for application in applications {
             target.addItem(actionItem(
-                title: "进入 \(application.name)",
+                title: L10n.format("进入 %@", L10n.text(application.name)),
                 symbol: application.symbolName,
                 payload: "application|\(application.id)"
             ))
@@ -330,9 +335,9 @@ final class FinderSync: FIFinderSync {
             return
         }
         let title = store.config.title(for: tool)
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: L10n.text(title), action: nil, keyEquivalent: "")
         item.image = image(tool.symbolName)
-        let submenu = NSMenu(title: title)
+        let submenu = NSMenu(title: L10n.text(title))
         submenu.addItem(actionItem(title: "MD5", symbol: "number", payload: "checksum|md5"))
         submenu.addItem(actionItem(title: "SHA-1", symbol: "number", payload: "checksum|sha1"))
         submenu.addItem(actionItem(title: "SHA-256", symbol: "number", payload: "checksum|sha256"))
@@ -346,7 +351,7 @@ final class FinderSync: FIFinderSync {
     }
 
     private func actionItem(title: String, symbol: String, payload: String) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: #selector(handleAction(_:)), keyEquivalent: "")
+        let item = NSMenuItem(title: L10n.text(title), action: #selector(handleAction(_:)), keyEquivalent: "")
         item.target = self
         nextActionTag += 1
         item.tag = nextActionTag
@@ -368,7 +373,7 @@ final class FinderSync: FIFinderSync {
             let performed = try execute(payload)
             if performed, store.config.playSound { NSSound(named: "Glass")?.play() }
         } catch {
-            showAlert(title: "操作失败", message: error.localizedDescription)
+            showAlert(title: L10n.text("操作失败"), message: error.localizedDescription)
         }
     }
 
@@ -451,7 +456,7 @@ final class FinderSync: FIFinderSync {
             try FileOperations.createDesktopShortcuts(for: urls)
         case .shareAirDrop:
             guard let service = NSSharingService(named: .sendViaAirDrop) else {
-                throw FileOperationError.processFailed("当前无法使用隔空投送")
+                throw FileOperationError.processFailed(L10n.text("当前无法使用隔空投送"))
             }
             service.perform(withItems: urls)
         case .copyName:
@@ -491,18 +496,18 @@ final class FinderSync: FIFinderSync {
         case .repairFilename:
             let repairs = try FileOperations.proposedFilenameRepairs(for: urls)
             guard !repairs.isEmpty else {
-                throw FileOperationError.processFailed("未发现可高置信度修复的乱码文件名")
+                throw FileOperationError.processFailed(L10n.text("未发现可高置信度修复的乱码文件名"))
             }
             let preview = repairs.prefix(8).map {
                 "\($0.source.lastPathComponent)  →  \($0.target.lastPathComponent)"
             }.joined(separator: "\n")
-            let remaining = repairs.count > 8 ? "\n…以及另外 \(repairs.count - 8) 项" : ""
+            let remaining = repairs.count > 8 ? "\n" + L10n.format("…以及另外 %d 项", repairs.count - 8) : ""
             let alert = NSAlert()
-            alert.messageText = "确认修复乱码文件名？"
+            alert.messageText = L10n.text("确认修复乱码文件名？")
             alert.informativeText = preview + remaining
             alert.alertStyle = .informational
-            alert.addButton(withTitle: "修复")
-            alert.addButton(withTitle: "取消")
+            alert.addButton(withTitle: L10n.text("修复"))
+            alert.addButton(withTitle: L10n.text("取消"))
             guard alert.runModal() == .alertFirstButtonReturn else { return false }
             try FileOperations.applyFilenameRepairs(repairs)
         case .generateQRCode:
@@ -514,11 +519,11 @@ final class FinderSync: FIFinderSync {
         case .permanentDelete:
             if store.config.confirmPermanentDelete {
                 let alert = NSAlert()
-                alert.messageText = "彻底删除所选项目？"
-                alert.informativeText = "此操作不会移入废纸篓，删除后无法恢复。"
+                alert.messageText = L10n.text("彻底删除所选项目？")
+                alert.informativeText = L10n.text("此操作不会移入废纸篓，删除后无法恢复。")
                 alert.alertStyle = .critical
-                alert.addButton(withTitle: "彻底删除")
-                alert.addButton(withTitle: "取消")
+                alert.addButton(withTitle: L10n.text("彻底删除"))
+                alert.addButton(withTitle: L10n.text("取消"))
                 guard alert.runModal() == .alertFirstButtonReturn else { return false }
             }
             try FileOperations.deletePermanently(urls)
@@ -568,7 +573,7 @@ final class FinderSync: FIFinderSync {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         guard pasteboard.writeObjects(urls as [NSURL]) else {
-            throw FileOperationError.processFailed("无法写入系统剪贴板")
+            throw FileOperationError.processFailed(L10n.text("无法写入系统剪贴板"))
         }
         if store.config.hideCutItems {
             try FileOperations.setHidden(true, for: urls)
@@ -623,8 +628,8 @@ final class FinderSync: FIFinderSync {
 
     private func chooseDestinationAndTransfer(action: String) throws -> Bool {
         let panel = NSOpenPanel()
-        panel.title = action == "copy" ? "选择复制目标目录" : "选择移动目标目录"
-        panel.prompt = action == "copy" ? "复制到这里" : "移动到这里"
+        panel.title = L10n.text(action == "copy" ? "选择复制目标目录" : "选择移动目标目录")
+        panel.prompt = L10n.text(action == "copy" ? "复制到这里" : "移动到这里")
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
@@ -725,7 +730,7 @@ final class FinderSync: FIFinderSync {
         }
         let request = TerminalLaunchRequest(application: application, mode: mode, directories: directories)
         guard let url = TerminalAutomation.requestURL(for: request), NSWorkspace.shared.open(url) else {
-            throw FileOperationError.processFailed("无法请求 \(application.displayName) 打开目录")
+            throw FileOperationError.processFailed(L10n.format("无法请求 %@ 打开目录", application.displayName))
         }
     }
 

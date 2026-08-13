@@ -9,6 +9,7 @@ swiftc \
   -swift-version 5 \
   -framework AppKit \
   -framework CoreImage \
+  "$ROOT_DIR/Sources/Core/Localization.swift" \
   "$ROOT_DIR/Sources/Core/Models.swift" \
   "$ROOT_DIR/Sources/Core/FinderScope.swift" \
   "$ROOT_DIR/Sources/Core/FileOperations.swift" \

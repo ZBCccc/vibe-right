@@ -10,7 +10,7 @@ final class MainWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "灵犀右键"
+        window.title = L10n.text("灵犀右键")
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.minSize = NSSize(width: 820, height: 560)
@@ -20,6 +20,11 @@ final class MainWindowController: NSWindowController {
     }
 
     required init?(coder: NSCoder) { nil }
+
+    func refreshLocalization() {
+        window?.title = L10n.text("灵犀右键")
+        (window?.contentViewController as? MainViewController)?.refreshLocalizedUI()
+    }
 }
 
 private enum SettingsSection: Int, CaseIterable {
@@ -32,15 +37,17 @@ private enum SettingsSection: Int, CaseIterable {
     case about
 
     var title: String {
+        let key: String
         switch self {
-        case .general: return "通用设置"
-        case .newFiles: return "新建文件"
-        case .destinations: return "发送文件到…"
-        case .favorites: return "常用目录"
-        case .icons: return "文件（夹）图标"
-        case .toolbox: return "工具箱"
-        case .about: return "关于"
+        case .general: key = "通用设置"
+        case .newFiles: key = "新建文件"
+        case .destinations: key = "发送文件到…"
+        case .favorites: key = "常用目录"
+        case .icons: key = "文件（夹）图标"
+        case .toolbox: key = "工具箱"
+        case .about: key = "关于"
         }
+        return L10n.text(key)
     }
 
     var symbol: String {
@@ -125,6 +132,8 @@ final class MainViewController: NSViewController {
     }
 
     private func buildSidebar() {
+        sidebar.subviews.forEach { $0.removeFromSuperview() }
+        sectionButtons.removeAll()
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -217,12 +226,23 @@ final class MainViewController: NSViewController {
             symbol: enabled ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
             color: enabled ? .systemGreen : .systemOrange
         )
-        let manage = NSButton(title: "管理扩展…", target: self, action: #selector(openExtensionManagement))
+        let manage = NSButton(title: L10n.text("管理扩展…"), target: self, action: #selector(openExtensionManagement))
         manage.bezelStyle = .rounded
         status.addArrangedSubview(manage)
         contentStack.addArrangedSubview(card(title: "扩展状态", symbol: "puzzlepiece.extension", content: status))
 
         let settings = verticalStack()
+        let languages = AppLanguage.allCases
+        settings.addArrangedSubview(selectionRow(
+            title: "语言",
+            subtitle: "选择界面和 Finder 右键菜单使用的语言",
+            options: languages.map(\.displayName),
+            selectedIndex: languages.firstIndex(of: store.config.language) ?? 0
+        ) { [weak self] index in
+            guard let self, languages.indices.contains(index) else { return }
+            self.updateConfig { $0.language = languages[index] }
+        })
+        settings.addArrangedSubview(divider())
         settings.addArrangedSubview(switchRow(
             title: "显示菜单栏图标",
             subtitle: "关闭后仍可从应用或 Finder 菜单打开设置",
@@ -267,25 +287,33 @@ final class MainViewController: NSViewController {
         contentStack.addArrangedSubview(card(title: "作用范围", symbol: "scope", content: scope))
     }
 
+    fileprivate func refreshLocalizedUI() {
+        view.window?.title = L10n.text("灵犀右键")
+        buildSidebar()
+        renderSelectedSection()
+    }
+
     private func renderTemplates() {
         let intro = descriptionLabel("开启的模板会出现在 Finder 的“新建文件”子菜单中。名称冲突时会自动追加序号，不覆盖已有文件。")
         contentStack.addArrangedSubview(intro)
 
         let list = verticalStack()
         for (index, template) in store.config.templates.enumerated() {
-            let subtitle = template.isDirectory ? "目录" : ".\(template.fileExtension) 文件"
+            let subtitle = template.isDirectory
+                ? L10n.text("目录")
+                : L10n.format(".%@ 文件", template.fileExtension)
             let row = NSStackView()
             row.orientation = .horizontal
             row.alignment = .centerY
             row.spacing = 8
-            let toggle = switchRow(title: template.name, subtitle: subtitle, value: template.enabled) { [weak self] value in
+            let toggle = switchRow(title: L10n.text(template.name), subtitle: subtitle, value: template.enabled) { [weak self] value in
                 self?.updateConfig { config in config.templates[index].enabled = value }
             }
             toggle.setContentHuggingPriority(.defaultLow, for: .horizontal)
             row.addArrangedSubview(toggle)
 
-            let mainMenu = NSButton(checkboxWithTitle: "主菜单", target: nil, action: nil)
-            mainMenu.toolTip = "直接显示在 Finder 右键主菜单，不收入“新建文件”子菜单"
+            let mainMenu = NSButton(checkboxWithTitle: L10n.text("主菜单"), target: nil, action: nil)
+            mainMenu.toolTip = L10n.text("直接显示在 Finder 右键主菜单，不收入“新建文件”子菜单")
             mainMenu.state = template.showInMainMenu ? .on : .off
             bind(mainMenu) { [weak self] control in
                 self?.updateConfig {
@@ -310,12 +338,12 @@ final class MainViewController: NSViewController {
         }
         contentStack.addArrangedSubview(card(title: "文件模板", symbol: "doc.on.doc", content: list))
 
-        let add = NSButton(title: "添加模板文件…", target: self, action: #selector(addTemplate))
+        let add = NSButton(title: L10n.text("添加模板文件…"), target: self, action: #selector(addTemplate))
         add.bezelStyle = .rounded
         add.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
         contentStack.addArrangedSubview(add)
 
-        let reset = NSButton(title: "恢复默认模板", target: self, action: #selector(resetTemplates))
+        let reset = NSButton(title: L10n.text("恢复默认模板"), target: self, action: #selector(resetTemplates))
         reset.bezelStyle = .rounded
         contentStack.addArrangedSubview(reset)
     }
@@ -351,7 +379,7 @@ final class MainViewController: NSViewController {
         )
         contentStack.addArrangedSubview(card(title: "传送目录", symbol: "folder", content: list))
 
-        let add = NSButton(title: "添加目录…", target: self, action: #selector(addDestination))
+        let add = NSButton(title: L10n.text("添加目录…"), target: self, action: #selector(addDestination))
         add.bezelStyle = .rounded
         add.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
         contentStack.addArrangedSubview(add)
@@ -382,7 +410,7 @@ final class MainViewController: NSViewController {
         )
         contentStack.addArrangedSubview(card(title: "常用目录", symbol: "heart.fill", content: list))
 
-        let add = NSButton(title: "添加目录…", target: self, action: #selector(addFavorite))
+        let add = NSButton(title: L10n.text("添加目录…"), target: self, action: #selector(addFavorite))
         add.bezelStyle = .rounded
         add.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
         contentStack.addArrangedSubview(add)
@@ -401,7 +429,7 @@ final class MainViewController: NSViewController {
             row.orientation = .horizontal
             row.alignment = .centerY
             row.spacing = 12
-            let toggle = NSButton(checkboxWithTitle: destination.name, target: nil, action: nil)
+            let toggle = NSButton(checkboxWithTitle: L10n.text(destination.name), target: nil, action: nil)
             toggle.state = destination.enabled ? .on : .off
             bind(toggle) { control in
                 setEnabled(index, (control as! NSButton).state == .on)
@@ -462,7 +490,7 @@ final class MainViewController: NSViewController {
                 name.setContentHuggingPriority(.defaultLow, for: .horizontal)
                 row.addArrangedSubview(name)
                 let remove = NSButton(
-                    image: NSImage(systemSymbolName: "trash", accessibilityDescription: "移除图标") ?? NSImage(),
+                    image: NSImage(systemSymbolName: "trash", accessibilityDescription: L10n.text("移除图标")) ?? NSImage(),
                     target: nil,
                     action: nil
                 )
@@ -481,7 +509,7 @@ final class MainViewController: NSViewController {
             contentStack.addArrangedSubview(card(title: "自定义图标", symbol: "photo", content: customIcons))
         }
 
-        let add = NSButton(title: "添加图标图片…", target: self, action: #selector(addCustomIcon))
+        let add = NSButton(title: L10n.text("添加图标图片…"), target: self, action: #selector(addCustomIcon))
         add.bezelStyle = .rounded
         add.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
         contentStack.addArrangedSubview(add)
@@ -619,7 +647,7 @@ final class MainViewController: NSViewController {
 
             if !application.isBuiltIn {
                 let remove = NSButton(
-                    image: NSImage(systemSymbolName: "trash", accessibilityDescription: "移除") ?? NSImage(),
+                    image: NSImage(systemSymbolName: "trash", accessibilityDescription: L10n.text("移除")) ?? NSImage(),
                     target: nil,
                     action: nil
                 )
@@ -642,7 +670,7 @@ final class MainViewController: NSViewController {
         }
         contentStack.addArrangedSubview(card(title: "进入应用", symbol: "app.badge", content: applications))
 
-        let addApplication = NSButton(title: "添加应用…", target: self, action: #selector(addApplication))
+        let addApplication = NSButton(title: L10n.text("添加应用…"), target: self, action: #selector(addApplication))
         addApplication.bezelStyle = .rounded
         addApplication.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
         contentStack.addArrangedSubview(addApplication)
@@ -685,8 +713,8 @@ final class MainViewController: NSViewController {
     @objc private func addTemplate() {
         guard let window = view.window else { return }
         let panel = NSOpenPanel()
-        panel.title = "选择模板文件"
-        panel.prompt = "添加模板"
+        panel.title = L10n.text("选择模板文件")
+        panel.prompt = L10n.text("添加模板")
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = true
@@ -724,7 +752,7 @@ final class MainViewController: NSViewController {
                 let url = URL(fileURLWithPath: templatePath).standardizedFileURL
                 let storagePath = store.templateStorageURL.standardizedFileURL.path + "/"
                 guard url.path.hasPrefix(storagePath) else {
-                    throw FileOperationError.processFailed("拒绝删除模板存储目录之外的文件")
+                    throw FileOperationError.processFailed(L10n.text("拒绝删除模板存储目录之外的文件"))
                 }
                 if FileManager.default.fileExists(atPath: url.path) {
                     try FileManager.default.removeItem(at: url)
@@ -820,10 +848,10 @@ final class MainViewController: NSViewController {
     private func promptForName(title: String, currentValue: String, completion: @escaping (String) -> Void) {
         guard let window = view.window else { return }
         let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = "名称会直接显示在 Finder 菜单中。"
-        alert.addButton(withTitle: "保存")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = L10n.text(title)
+        alert.informativeText = L10n.text("名称会直接显示在 Finder 菜单中。")
+        alert.addButton(withTitle: L10n.text("保存"))
+        alert.addButton(withTitle: L10n.text("取消"))
         let field = NSTextField(string: currentValue)
         field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
         field.selectText(nil)
@@ -843,7 +871,7 @@ final class MainViewController: NSViewController {
     @objc private func addDestination() {
         guard let window = view.window else { return }
         let panel = NSOpenPanel()
-        panel.title = "选择常用目录"
+        panel.title = L10n.text("选择常用目录")
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
@@ -860,7 +888,7 @@ final class MainViewController: NSViewController {
     @objc private func addFavorite() {
         guard let window = view.window else { return }
         let panel = NSOpenPanel()
-        panel.title = "选择常用目录"
+        panel.title = L10n.text("选择常用目录")
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
@@ -879,8 +907,8 @@ final class MainViewController: NSViewController {
     @objc private func addApplication() {
         guard let window = view.window else { return }
         let panel = NSOpenPanel()
-        panel.title = "选择要加入 Finder 菜单的应用"
-        panel.prompt = "添加应用"
+        panel.title = L10n.text("选择要加入 Finder 菜单的应用")
+        panel.prompt = L10n.text("添加应用")
         panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
@@ -890,7 +918,7 @@ final class MainViewController: NSViewController {
         panel.beginSheetModal(for: window) { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
             guard let bundle = Bundle(url: url), let bundleIdentifier = bundle.bundleIdentifier else {
-                self?.showError(FileOperationError.processFailed("所选项目不是有效的 macOS 应用"))
+                self?.showError(FileOperationError.processFailed(L10n.text("所选项目不是有效的 macOS 应用")))
                 return
             }
             let displayName = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
@@ -917,8 +945,8 @@ final class MainViewController: NSViewController {
     @objc private func addCustomIcon() {
         guard let window = view.window else { return }
         let panel = NSOpenPanel()
-        panel.title = "选择图标图片"
-        panel.prompt = "添加图标"
+        panel.title = L10n.text("选择图标图片")
+        panel.prompt = L10n.text("添加图标")
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = true
@@ -956,7 +984,7 @@ final class MainViewController: NSViewController {
             let url = URL(fileURLWithPath: customIcon.path).standardizedFileURL
             let storagePath = store.iconStorageURL.standardizedFileURL.path + "/"
             guard url.path.hasPrefix(storagePath) else {
-                throw FileOperationError.processFailed("拒绝删除图标存储目录之外的文件")
+                throw FileOperationError.processFailed(L10n.text("拒绝删除图标存储目录之外的文件"))
             }
             if FileManager.default.fileExists(atPath: url.path) {
                 try FileManager.default.removeItem(at: url)
@@ -986,12 +1014,12 @@ final class MainViewController: NSViewController {
         action: @escaping () -> Void
     ) -> NSButton {
         let button = NSButton(
-            image: NSImage(systemSymbolName: symbol, accessibilityDescription: accessibilityLabel) ?? NSImage(),
+            image: NSImage(systemSymbolName: symbol, accessibilityDescription: L10n.text(accessibilityLabel)) ?? NSImage(),
             target: nil,
             action: nil
         )
         button.isBordered = false
-        button.toolTip = accessibilityLabel
+        button.toolTip = L10n.text(accessibilityLabel)
         bind(button) { _ in action() }
         return button
     }
@@ -1181,7 +1209,7 @@ final class MainViewController: NSViewController {
     }
 
     private func label(_ text: String, size: CGFloat, weight: NSFont.Weight = .regular, color: NSColor = .labelColor) -> NSTextField {
-        let field = NSTextField(labelWithString: text)
+        let field = NSTextField(labelWithString: L10n.text(text))
         field.font = .systemFont(ofSize: size, weight: weight)
         field.textColor = color
         return field
@@ -1212,7 +1240,7 @@ final class MainViewController: NSViewController {
 
     private func showError(_ error: Error) {
         let alert = NSAlert()
-        alert.messageText = "保存失败"
+        alert.messageText = L10n.text("保存失败")
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
         alert.beginSheetModal(for: view.window ?? NSWindow())

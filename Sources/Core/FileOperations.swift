@@ -14,13 +14,13 @@ enum FileOperationError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noTargetDirectory: return "无法确定目标目录"
-        case .notDirectory(let url): return "不是文件夹：\(url.lastPathComponent)"
-        case .emptySelection: return "请先选择文件或文件夹"
-        case .templateMissing(let url): return "模板文件不存在：\(url.lastPathComponent)"
-        case .unsupportedImage(let url): return "无法读取图片：\(url.lastPathComponent)"
-        case .applicationNotFound(let name): return "未安装 \(name)"
-        case .processFailed(let message): return message
+        case .noTargetDirectory: return L10n.text("无法确定目标目录")
+        case .notDirectory(let url): return L10n.format("不是文件夹：%@", url.lastPathComponent)
+        case .emptySelection: return L10n.text("请先选择文件或文件夹")
+        case .templateMissing(let url): return L10n.format("模板文件不存在：%@", url.lastPathComponent)
+        case .unsupportedImage(let url): return L10n.format("无法读取图片：%@", url.lastPathComponent)
+        case .applicationNotFound(let name): return L10n.format("未安装 %@", name)
+        case .processFailed(let message): return L10n.text(message)
         }
     }
 }
@@ -59,7 +59,7 @@ enum FileOperations {
         in directory: URL,
         builtInTemplateDirectory: URL? = nil
     ) throws -> URL {
-        let baseName = template.isDirectory ? "新建文件夹" : "未命名"
+        let baseName = L10n.text(template.isDirectory ? "新建文件夹" : "未命名")
         let url = uniqueURL(in: directory, preferredName: baseName, pathExtension: template.fileExtension)
         if let templatePath = template.templatePath {
             let source = URL(fileURLWithPath: templatePath)
@@ -488,7 +488,7 @@ enum FileOperations {
         var results: [URL] = []
         for archive in archives {
             guard ["zip", "7z"].contains(archive.pathExtension.lowercased()) else {
-                throw FileOperationError.processFailed("暂不支持解压：\(archive.lastPathComponent)")
+                throw FileOperationError.processFailed(L10n.format("暂不支持解压：%@", archive.lastPathComponent))
             }
             let entries = try runProcess(
                 executable: URL(fileURLWithPath: "/usr/bin/tar"),
@@ -528,7 +528,7 @@ enum FileOperations {
         guard urls.allSatisfy({ $0.deletingLastPathComponent().standardizedFileURL == parent }) else {
             throw FileOperationError.processFailed("只能压缩同一目录中的项目")
         }
-        let archiveName = urls.count == 1 ? first.lastPathComponent : "归档"
+        let archiveName = urls.count == 1 ? first.lastPathComponent : L10n.text("归档")
         return (
             parent,
             uniqueURL(in: parent, preferredName: archiveName, pathExtension: pathExtension),
@@ -546,7 +546,7 @@ enum FileOperations {
             ) != nil
             if normalized.hasPrefix("/") || hasDrivePrefix || components.contains("..") {
                 throw FileOperationError.processFailed(
-                    "压缩包包含不安全路径，已停止解压：\(archive.lastPathComponent)"
+                    L10n.format("压缩包包含不安全路径，已停止解压：%@", archive.lastPathComponent)
                 )
             }
         }
@@ -569,7 +569,7 @@ enum FileOperations {
             executable = URL(fileURLWithPath: "/usr/bin/shasum")
             arguments = ["-a", "512", url.path]
         default:
-            throw FileOperationError.processFailed("不支持的摘要算法：\(algorithm)")
+            throw FileOperationError.processFailed(L10n.format("不支持的摘要算法：%@", algorithm))
         }
 
         let process = Process()
@@ -590,7 +590,7 @@ enum FileOperations {
     @discardableResult
     static func createQRCode(from text: String, in directory: URL) throws -> URL {
         let data = try qrCodePNGData(from: text)
-        let output = uniqueURL(in: directory, preferredName: "二维码", pathExtension: "png")
+        let output = uniqueURL(in: directory, preferredName: L10n.text("二维码"), pathExtension: "png")
         try data.write(to: output, options: .atomic)
         return output
     }
@@ -863,7 +863,7 @@ enum FileOperations {
         guard !urls.isEmpty else { throw FileOperationError.emptySelection }
         for url in urls {
             guard NSWorkspace.shared.setIcon(icon, forFile: url.path, options: []) else {
-                throw FileOperationError.processFailed("无法修改图标：\(url.lastPathComponent)")
+                throw FileOperationError.processFailed(L10n.format("无法修改图标：%@", url.lastPathComponent))
             }
         }
     }

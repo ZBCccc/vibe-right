@@ -22,10 +22,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let textServiceProvider = TextServiceProvider()
     private var handledLaunchAction = false
     private var launchSettingsWorkItem: DispatchWorkItem?
+    private var currentLanguage: AppLanguage = .system
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.servicesProvider = textServiceProvider
         ConfigStore.shared.reload()
+        currentLanguage = ConfigStore.shared.config.language
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(configChanged),
@@ -71,7 +73,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func configChanged() {
         ConfigStore.shared.reload()
+        let languageChanged = currentLanguage != ConfigStore.shared.config.language
+        currentLanguage = ConfigStore.shared.config.language
         updateStatusItemVisibility()
+        if languageChanged {
+            DispatchQueue.main.async { [weak self] in self?.windowController?.refreshLocalization() }
+        }
     }
 
     private func updateStatusItemVisibility() {
@@ -80,23 +87,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem = nil
             return
         }
-        guard statusItem == nil else { return }
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "cursorarrow.click.2", accessibilityDescription: "灵犀右键")
-        item.button?.toolTip = "灵犀右键"
+        let item: NSStatusItem
+        if let statusItem {
+            item = statusItem
+        } else {
+            item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+            statusItem = item
+        }
+        let applicationName = L10n.text("灵犀右键")
+        item.button?.image = NSImage(systemSymbolName: "cursorarrow.click.2", accessibilityDescription: applicationName)
+        item.button?.toolTip = applicationName
 
         let menu = NSMenu()
-        let settings = NSMenuItem(title: "打开设置", action: #selector(showSettings), keyEquivalent: ",")
+        let settings = NSMenuItem(title: L10n.text("打开设置"), action: #selector(showSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
-        let extensionSettings = NSMenuItem(title: "管理 Finder 扩展", action: #selector(showExtensionSettings), keyEquivalent: "")
+        let extensionSettings = NSMenuItem(title: L10n.text("管理 Finder 扩展"), action: #selector(showExtensionSettings), keyEquivalent: "")
         extensionSettings.target = self
         menu.addItem(extensionSettings)
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "退出灵犀右键", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: L10n.text("退出灵犀右键"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
         item.menu = menu
-        statusItem = item
     }
 
     @objc private func showSettings() {
@@ -112,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showAutomationError(_ error: Error) {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "打开终端失败"
+        alert.messageText = L10n.text("打开终端失败")
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
         alert.runModal()

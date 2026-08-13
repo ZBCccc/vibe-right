@@ -17,6 +17,7 @@
 - 隐藏或取消隐藏已选/当前目录文件，切换扩展名显示
 - 根据所选项目路径离线生成可扫描的 PNG 二维码
 - 在任意支持 macOS 服务的应用中，对选中文本调用百度翻译、谷歌翻译或生成二维码
+- 支持跟随系统，以及简体中文、繁體中文、English、日本語、한국어、Français、Español、Português、Deutsch
 - 在系统终端、iTerm2 中按配置打开新窗口或新标签页，并支持 Warp
 - 内置 VS Code、Cursor、Sublime、Obsidian、JetBrains 等 27 个应用入口
 - 可从 `/Applications` 添加任意 macOS 应用作为“进入应用”动作
@@ -53,6 +54,7 @@ killall Finder
 - `Scripts/build.sh`：无 Xcode 构建并签名 `.app`/`.appex`
 
 WPS 二进制模板的生成方式、校验摘要和隐私检查见 [`docs/BUILT_IN_TEMPLATES.md`](docs/BUILT_IN_TEMPLATES.md)。
+多语言资源、运行时切换与完整性约束见 [`docs/LOCALIZATION.md`](docs/LOCALIZATION.md)。
 
 默认配置保存在：
 

@@ -94,8 +94,8 @@ enum TerminalOpenMode: String, Codable, CaseIterable {
 
     var title: String {
         switch self {
-        case .window: return "新窗口"
-        case .tab: return "新标签页"
+        case .window: return L10n.text("新窗口")
+        case .tab: return L10n.text("新标签页")
         }
     }
 }
@@ -116,19 +116,21 @@ enum FileIconPreset: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
+        let key: String
         switch self {
-        case .app: return "App"
-        case .apple: return "Apple"
-        case .book: return "书本"
-        case .calendar: return "日历"
-        case .cloud: return "云端"
-        case .document: return "文件"
-        case .mail: return "邮件"
-        case .music: return "音乐"
-        case .pictures: return "图片"
-        case .presentation: return "演示"
-        case .video: return "视频"
+        case .app: key = "App"
+        case .apple: key = "Apple"
+        case .book: key = "书本"
+        case .calendar: key = "日历"
+        case .cloud: key = "云端"
+        case .document: key = "文件"
+        case .mail: key = "邮件"
+        case .music: key = "音乐"
+        case .pictures: key = "图片"
+        case .presentation: key = "演示"
+        case .video: key = "视频"
         }
+        return L10n.text(key)
     }
 
     var symbolName: String {
@@ -195,44 +197,46 @@ enum ToolActionID: String, Codable, CaseIterable {
     case makeIOSIconSet
 
     var title: String {
+        let key: String
         switch self {
-        case .createDesktopShortcut: return "发送快捷方式到桌面"
-        case .shareAirDrop: return "隔空投送"
-        case .copyName: return "拷贝文件（夹）名称"
-        case .copyPath: return "拷贝路径"
-        case .fileInfo: return "文件信息"
-        case .createFolderFromName: return "使用文件名新建文件夹"
-        case .cut: return "剪切"
-        case .dissolveFolder: return "解散文件夹"
-        case .setWallpaper: return "设置为墙纸"
-        case .addToFavorites: return "添加到常用目录"
-        case .grantWritePermission: return "授予选择的文件写入权限"
-        case .hideAll: return "隐藏所有文件"
-        case .unhideAll: return "取消隐藏所有文件"
-        case .hideSelected: return "隐藏已选文件"
-        case .unhideSelected: return "取消隐藏已选文件"
-        case .toggleFileExtension: return "隐藏/显示文件扩展名"
-        case .repairFilename: return "修复乱码文件名"
-        case .generateQRCode: return "根据路径生成二维码"
-        case .permanentDelete: return "彻底删除"
-        case .compress7Z: return "压缩为 7z"
-        case .compressZIP: return "压缩为 ZIP"
-        case .extractArchive: return "解压到当前文件夹"
-        case .toggleHidden: return "隐藏/取消隐藏"
-        case .openTerminal: return "进入终端"
-        case .openWarp: return "进入 Warp"
-        case .openITerm2: return "进入 iTerm2"
-        case .openVSCode: return "进入 Visual Studio Code"
-        case .openCursor: return "使用 Cursor 打开"
-        case .openGoLand: return "进入 GoLand"
-        case .convertPNG: return "图片转换为 PNG"
-        case .convertJPEG: return "图片转换为 JPEG"
-        case .convertWebP: return "图片转换为 WebP"
-        case .convertHEIC: return "图片转换为 HEIC"
-        case .convertICNS: return "图片转换为 ICNS"
-        case .makeMacIconSet: return "生成 macOS 图标集"
-        case .makeIOSIconSet: return "生成 iOS 图标集"
+        case .createDesktopShortcut: key = "发送快捷方式到桌面"
+        case .shareAirDrop: key = "隔空投送"
+        case .copyName: key = "拷贝文件（夹）名称"
+        case .copyPath: key = "拷贝路径"
+        case .fileInfo: key = "文件信息"
+        case .createFolderFromName: key = "使用文件名新建文件夹"
+        case .cut: key = "剪切"
+        case .dissolveFolder: key = "解散文件夹"
+        case .setWallpaper: key = "设置为墙纸"
+        case .addToFavorites: key = "添加到常用目录"
+        case .grantWritePermission: key = "授予选择的文件写入权限"
+        case .hideAll: key = "隐藏所有文件"
+        case .unhideAll: key = "取消隐藏所有文件"
+        case .hideSelected: key = "隐藏已选文件"
+        case .unhideSelected: key = "取消隐藏已选文件"
+        case .toggleFileExtension: key = "隐藏/显示文件扩展名"
+        case .repairFilename: key = "修复乱码文件名"
+        case .generateQRCode: key = "根据路径生成二维码"
+        case .permanentDelete: key = "彻底删除"
+        case .compress7Z: key = "压缩为 7z"
+        case .compressZIP: key = "压缩为 ZIP"
+        case .extractArchive: key = "解压到当前文件夹"
+        case .toggleHidden: key = "隐藏/取消隐藏"
+        case .openTerminal: key = "进入终端"
+        case .openWarp: key = "进入 Warp"
+        case .openITerm2: key = "进入 iTerm2"
+        case .openVSCode: key = "进入 Visual Studio Code"
+        case .openCursor: key = "使用 Cursor 打开"
+        case .openGoLand: key = "进入 GoLand"
+        case .convertPNG: key = "图片转换为 PNG"
+        case .convertJPEG: key = "图片转换为 JPEG"
+        case .convertWebP: key = "图片转换为 WebP"
+        case .convertHEIC: key = "图片转换为 HEIC"
+        case .convertICNS: key = "图片转换为 ICNS"
+        case .makeMacIconSet: key = "生成 macOS 图标集"
+        case .makeIOSIconSet: key = "生成 iOS 图标集"
         }
+        return L10n.text(key)
     }
 
     var symbolName: String {
@@ -303,6 +307,7 @@ enum ToolActionID: String, Codable, CaseIterable {
 
 struct AppConfig: Codable, Equatable {
     var schemaVersion: Int
+    var language: AppLanguage
     var templates: [FileTemplate]
     var destinations: [Destination]
     var favorites: [Destination]
@@ -393,7 +398,8 @@ struct AppConfig: Codable, Equatable {
     ]
 
     static let defaults = AppConfig(
-        schemaVersion: 20,
+        schemaVersion: 21,
+        language: .system,
         templates: defaultTemplates,
         destinations: defaultDestinations,
         favorites: defaultFavorites,
@@ -424,6 +430,7 @@ struct AppConfig: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion
+        case language
         case templates
         case destinations
         case favorites
@@ -454,6 +461,7 @@ struct AppConfig: Codable, Equatable {
 
     init(
         schemaVersion: Int,
+        language: AppLanguage,
         templates: [FileTemplate],
         destinations: [Destination],
         favorites: [Destination],
@@ -482,6 +490,7 @@ struct AppConfig: Codable, Equatable {
         iTermOpenMode: TerminalOpenMode
     ) {
         self.schemaVersion = schemaVersion
+        self.language = language
         self.templates = templates
         self.destinations = destinations
         self.favorites = favorites
@@ -513,6 +522,7 @@ struct AppConfig: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        language = try values.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .system
         templates = try values.decodeIfPresent([FileTemplate].self, forKey: .templates) ?? Self.defaultTemplates
         destinations = try values.decodeIfPresent([Destination].self, forKey: .destinations) ?? Self.defaultDestinations
         favorites = try values.decodeIfPresent([Destination].self, forKey: .favorites) ?? destinations
@@ -572,6 +582,7 @@ final class ConfigStore {
     init(configURL: URL = ConfigStore.defaultConfigURL) {
         self.configURL = configURL
         self.config = Self.load(from: configURL)
+        L10n.configure(language: config.language)
     }
 
     static var defaultConfigURL: URL {
@@ -594,10 +605,12 @@ final class ConfigStore {
 
     func reload() {
         config = Self.load(from: configURL)
+        L10n.configure(language: config.language)
     }
 
     func update(_ transform: (inout AppConfig) -> Void) throws {
         transform(&config)
+        L10n.configure(language: config.language)
         try save()
     }
 
@@ -762,6 +775,10 @@ final class ConfigStore {
                 }
             }
             decoded.schemaVersion = 20
+        }
+        if schemaVersion < 21 {
+            decoded.language = .system
+            decoded.schemaVersion = 21
         }
         let supportedTools = Set(ToolActionID.settingsCases)
         var seenTools = Set<ToolActionID>()

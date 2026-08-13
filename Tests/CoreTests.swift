@@ -70,6 +70,76 @@ struct CoreTests {
         let repositoryRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+        let localizationBundleURL = repositoryRoot
+            .appendingPathComponent("Resources", isDirectory: true)
+            .appendingPathComponent("Localization.bundle", isDirectory: true)
+        guard let localizationBundle = Bundle(url: localizationBundleURL) else {
+            preconditionFailure("Could not load Localization.bundle")
+        }
+        precondition(AppLanguage.allCases.count == 10)
+        precondition(AppLanguage.resolved(.system, preferredLanguages: ["zh-CN"]) == .simplifiedChinese)
+        precondition(AppLanguage.resolved(.system, preferredLanguages: ["zh-HK"]) == .traditionalChinese)
+        precondition(AppLanguage.resolved(.system, preferredLanguages: ["ja-JP"]) == .japanese)
+        precondition(AppLanguage.resolved(.system, preferredLanguages: ["ko-KR"]) == .korean)
+        precondition(AppLanguage.resolved(.system, preferredLanguages: ["fr-FR"]) == .french)
+        precondition(AppLanguage.resolved(.system, preferredLanguages: ["es-ES"]) == .spanish)
+        precondition(AppLanguage.resolved(.system, preferredLanguages: ["pt-BR"]) == .portuguese)
+        precondition(AppLanguage.resolved(.system, preferredLanguages: ["de-DE"]) == .german)
+        precondition(AppLanguage.resolved(.system, preferredLanguages: ["it-IT"]) == .english)
+        for language in AppLanguage.allCases {
+            let data = try JSONEncoder().encode(language)
+            let decodedLanguage = try JSONDecoder().decode(AppLanguage.self, from: data)
+            precondition(decodedLanguage == language)
+        }
+
+        let sourceKeys = try sourceLocalizationKeys(in: repositoryRoot.appendingPathComponent("Sources", isDirectory: true))
+        let simplifiedTranslations = L10n.availableTranslations(
+            for: .simplifiedChinese,
+            resourceBundle: localizationBundle
+        )
+        precondition(!sourceKeys.isEmpty)
+        precondition(Set(simplifiedTranslations.keys) == sourceKeys)
+        for language in AppLanguage.allCases where language != .system {
+            let translations = L10n.availableTranslations(for: language, resourceBundle: localizationBundle)
+            precondition(Set(translations.keys) == sourceKeys)
+            precondition(translations.values.allSatisfy { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+            for key in sourceKeys {
+                precondition(formatPlaceholders(in: key) == formatPlaceholders(in: translations[key]!))
+            }
+            if language != .simplifiedChinese {
+                let translatedCount = sourceKeys.filter { translations[$0] != simplifiedTranslations[$0] }.count
+                precondition(translatedCount >= 250)
+            }
+        }
+        L10n.configure(language: .english, resourceBundle: localizationBundle)
+        precondition(L10n.text("通用设置") == "General")
+        precondition(L10n.text("不存在的键") == "不存在的键")
+        precondition(L10n.format("新建 %@", "Folder") == "New Folder")
+        precondition(AppLanguage.allCases.map(\.displayName) == [
+            "Use System Language", "简体中文", "繁體中文", "English", "日本語",
+            "한국어", "Français", "Español", "Português", "Deutsch"
+        ])
+        precondition(ToolActionID.copyPath.title == "Copy Paths")
+        precondition(FileOperationError.emptySelection.localizedDescription == "Select a file or folder first")
+        L10n.configure(language: .traditionalChinese, resourceBundle: localizationBundle)
+        precondition(L10n.text("打开设置") == "開啟設定")
+        L10n.configure(language: .simplifiedChinese, resourceBundle: localizationBundle)
+
+        let appLocalizationRoot = repositoryRoot
+            .appendingPathComponent("Resources", isDirectory: true)
+            .appendingPathComponent("AppLocalizations", isDirectory: true)
+        let expectedServiceKeys: Set<String> = ["使用百度翻译", "使用谷歌翻译", "生成二维码（灵犀右键）"]
+        for language in AppLanguage.allCases where language != .system {
+            let file = appLocalizationRoot
+                .appendingPathComponent("\(language.rawValue).lproj", isDirectory: true)
+                .appendingPathComponent("ServicesMenu.strings")
+            guard let values = NSDictionary(contentsOf: file) as? [String: String] else {
+                preconditionFailure("Could not load \(file.path)")
+            }
+            precondition(Set(values.keys) == expectedServiceKeys)
+            precondition(values.values.allSatisfy { !$0.isEmpty })
+        }
+
         let builtInTemplateDirectory = repositoryRoot
             .appendingPathComponent("Resources", isDirectory: true)
             .appendingPathComponent("Templates", isDirectory: true)
@@ -143,6 +213,7 @@ struct CoreTests {
         let reloaded = ConfigStore(configURL: configURL)
         precondition(reloaded.config.playSound == false)
         precondition(reloaded.config.schemaVersion == AppConfig.defaults.schemaVersion)
+        precondition(reloaded.config.language == .system)
         precondition(reloaded.config.favorites == AppConfig.defaultFavorites)
         precondition(reloaded.config.applications[0].id == "iterm2")
         precondition(reloaded.config.applications[1].id == "terminal")
@@ -322,6 +393,26 @@ struct CoreTests {
         precondition(version18Migrated.config.templates.first(where: { $0.id == "ai" })?.name == "我的 Ai")
         precondition(version18Migrated.config.templates.first(where: { $0.id == "ai" })?.enabled == false)
         precondition(version18Migrated.config.templates.contains(where: { $0.id == "psd" }))
+
+        let version20ConfigURL = root.appendingPathComponent("version-20-config.json")
+        let version20Config = """
+        {
+          "schemaVersion": 20,
+          "templates": [],
+          "destinations": []
+        }
+        """
+        try Data(version20Config.utf8).write(to: version20ConfigURL)
+        let version20Migrated = ConfigStore(configURL: version20ConfigURL)
+        precondition(version20Migrated.config.schemaVersion == 21)
+        precondition(version20Migrated.config.language == .system)
+
+        let localizedConfigURL = root.appendingPathComponent("localized-config.json")
+        let localizedStore = ConfigStore(configURL: localizedConfigURL)
+        try localizedStore.update { $0.language = .japanese }
+        let localizedReloaded = ConfigStore(configURL: localizedConfigURL)
+        precondition(localizedReloaded.config.language == .japanese)
+        L10n.configure(language: .simplifiedChinese, resourceBundle: localizationBundle)
 
         let automationDirectory = root.appendingPathComponent("quoted \"folder\" & line\nnext", isDirectory: true)
         try FileManager.default.createDirectory(at: automationDirectory, withIntermediateDirectories: true)
@@ -564,6 +655,31 @@ struct CoreTests {
             throw FileOperationError.processFailed(output)
         }
         return output
+    }
+
+    private static func sourceLocalizationKeys(in sourceDirectory: URL) throws -> Set<String> {
+        let swiftFiles = try FileManager.default.subpathsOfDirectory(atPath: sourceDirectory.path)
+            .filter { $0.hasSuffix(".swift") }
+        let pattern = #""([^"\\]|\\.)*[一-龥]([^"\\]|\\.)*""#
+        let expression = try NSRegularExpression(pattern: pattern)
+        var keys = Set<String>()
+        for path in swiftFiles {
+            let source = try String(contentsOf: sourceDirectory.appendingPathComponent(path), encoding: .utf8)
+            let range = NSRange(source.startIndex..<source.endIndex, in: source)
+            for match in expression.matches(in: source, range: range) {
+                guard let matchRange = Range(match.range, in: source) else { continue }
+                keys.insert(String(source[matchRange].dropFirst().dropLast()))
+            }
+        }
+        return keys
+    }
+
+    private static func formatPlaceholders(in value: String) -> [String] {
+        let expression = try! NSRegularExpression(pattern: #"%(?:@|d)"#)
+        let range = NSRange(value.startIndex..<value.endIndex, in: value)
+        return expression.matches(in: value, range: range).compactMap {
+            Range($0.range, in: value).map { String(value[$0]) }
+        }.sorted()
     }
 
     private static func validateWithLibreOffice(_ urls: [URL], executable: String, root: URL) throws {

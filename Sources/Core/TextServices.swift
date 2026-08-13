@@ -9,10 +9,10 @@ enum TextServiceError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .emptyText: return "没有收到可处理的文本"
-        case .invalidURL: return "无法构造服务地址"
-        case .openFailed(let url): return "无法打开：\(url.absoluteString)"
-        case .pasteboardWriteFailed: return "无法写入二维码到剪贴板"
+        case .emptyText: return L10n.text("没有收到可处理的文本")
+        case .invalidURL: return L10n.text("无法构造服务地址")
+        case .openFailed(let url): return L10n.format("无法打开：%@", url.absoluteString)
+        case .pasteboardWriteFailed: return L10n.text("无法写入二维码到剪贴板")
         }
     }
 }
