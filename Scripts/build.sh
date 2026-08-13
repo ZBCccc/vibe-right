@@ -24,6 +24,7 @@ swiftc \
   "$ROOT_DIR/Sources/Core/Models.swift" \
   "$ROOT_DIR/Sources/Core/FileOperations.swift" \
   "$ROOT_DIR/Sources/Core/TerminalAutomation.swift" \
+  "$ROOT_DIR/Sources/Core/TextServices.swift" \
   "$ROOT_DIR/Sources/App/Main.swift" \
   "$ROOT_DIR/Sources/App/MainWindowController.swift" \
   -o "$APP_DIR/Contents/MacOS/VibeRight"
@@ -44,6 +45,7 @@ swiftc \
   "$ROOT_DIR/Sources/Core/Models.swift" \
   "$ROOT_DIR/Sources/Core/FileOperations.swift" \
   "$ROOT_DIR/Sources/Core/TerminalAutomation.swift" \
+  "$ROOT_DIR/Sources/Core/TextServices.swift" \
   "$ROOT_DIR/Sources/FinderExtension/FinderSync.swift" \
   "$BUILD_DIR/ExtensionMain.o" \
   -o "$EXT_DIR/Contents/MacOS/VibeRightFinderExtension"

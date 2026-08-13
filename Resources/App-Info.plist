@@ -16,6 +16,31 @@
     <key>LSMinimumSystemVersion</key><string>13.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
+    <key>NSServices</key>
+    <array>
+        <dict>
+            <key>NSMenuItem</key><dict><key>default</key><string>使用百度翻译</string></dict>
+            <key>NSMessage</key><string>translateWithBaidu</string>
+            <key>NSPortName</key><string>VibeRight</string>
+            <key>NSRequiredContext</key><dict><key>NSServiceCategory</key><string>Text</string></dict>
+            <key>NSSendTypes</key><array><string>public.plain-text</string><string>NSStringPboardType</string></array>
+        </dict>
+        <dict>
+            <key>NSMenuItem</key><dict><key>default</key><string>使用谷歌翻译</string></dict>
+            <key>NSMessage</key><string>translateWithGoogle</string>
+            <key>NSPortName</key><string>VibeRight</string>
+            <key>NSRequiredContext</key><dict><key>NSServiceCategory</key><string>Text</string></dict>
+            <key>NSSendTypes</key><array><string>public.plain-text</string><string>NSStringPboardType</string></array>
+        </dict>
+        <dict>
+            <key>NSMenuItem</key><dict><key>default</key><string>生成二维码（灵犀右键）</string></dict>
+            <key>NSMessage</key><string>generateQRCode</string>
+            <key>NSPortName</key><string>VibeRight</string>
+            <key>NSRequiredContext</key><dict><key>NSServiceCategory</key><string>Text</string></dict>
+            <key>NSSendTypes</key><array><string>public.plain-text</string><string>NSStringPboardType</string></array>
+            <key>NSReturnTypes</key><array><string>public.png</string><string>public.tiff</string></array>
+        </dict>
+    </array>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>

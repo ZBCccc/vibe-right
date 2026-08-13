@@ -513,6 +513,13 @@ enum FileOperations {
 
     @discardableResult
     static func createQRCode(from text: String, in directory: URL) throws -> URL {
+        let data = try qrCodePNGData(from: text)
+        let output = uniqueURL(in: directory, preferredName: "二维码", pathExtension: "png")
+        try data.write(to: output, options: .atomic)
+        return output
+    }
+
+    static func qrCodePNGData(from text: String) throws -> Data {
         guard !text.isEmpty else { throw FileOperationError.processFailed("二维码内容不能为空") }
         guard let filter = CIFilter(name: "CIQRCodeGenerator") else {
             throw FileOperationError.processFailed("当前系统不支持生成二维码")
@@ -545,9 +552,7 @@ enum FileOperations {
         guard let data = representation.representation(using: .png, properties: [:]) else {
             throw FileOperationError.processFailed("二维码编码失败")
         }
-        let output = uniqueURL(in: directory, preferredName: "二维码", pathExtension: "png")
-        try data.write(to: output, options: .atomic)
-        return output
+        return data
     }
 
     static func convertImages(_ urls: [URL], to type: NSBitmapImageRep.FileType) throws {

@@ -339,6 +339,49 @@ struct CoreTests {
         precondition(qrFeature?.messageString == qrText)
         let secondQRCode = try FileOperations.createQRCode(from: qrText, in: root)
         precondition(secondQRCode.lastPathComponent == "二维码 2.png")
+        let qrData = try FileOperations.qrCodePNGData(from: qrText)
+        precondition(!qrData.isEmpty)
+
+        let googleURL = try TextServices.translationURL(
+            for: " hello & 你好 ",
+            provider: .google,
+            preferredLanguages: ["zh-Hans-CN"]
+        )
+        let googleComponents = URLComponents(url: googleURL, resolvingAgainstBaseURL: false)
+        let googleQuery: [String: String] = Dictionary(uniqueKeysWithValues: (googleComponents?.queryItems ?? []).compactMap {
+            guard let value = $0.value else { return nil }
+            return ($0.name, value)
+        })
+        precondition(googleURL.host == "translate.google.com")
+        precondition(googleQuery["sl"] == "auto")
+        precondition(googleQuery["tl"] == "zh-CN")
+        precondition(googleQuery["text"] == "hello & 你好")
+        precondition(googleQuery["op"] == "translate")
+
+        let baiduURL = try TextServices.translationURL(
+            for: "hello/#? 世界",
+            provider: .baidu,
+            preferredLanguages: ["zh-Hant-TW"]
+        )
+        precondition(baiduURL.host == "fanyi.baidu.com")
+        precondition(baiduURL.path == "/mtpe-individual/transText")
+        precondition(baiduURL.fragment?.removingPercentEncoding == "/auto/zh/hello/#? 世界")
+        precondition(TextServices.translationTargetLanguage(preferredLanguages: ["ja-JP"]) == "ja")
+        precondition(TextServices.translationTargetLanguage(preferredLanguages: ["en-US"]) == "en")
+
+        let servicePasteboard = NSPasteboard.withUniqueName()
+        defer { servicePasteboard.releaseGlobally() }
+        servicePasteboard.declareTypes([.string], owner: nil)
+        servicePasteboard.setString(qrText, forType: .string)
+        let serviceInputText = try TextServices.readText(from: servicePasteboard)
+        precondition(serviceInputText == qrText)
+        try TextServices.writeQRCode(for: qrText, to: servicePasteboard)
+        let serviceQRData = servicePasteboard.data(forType: .png)
+        precondition(serviceQRData != nil)
+        let serviceQRImage = serviceQRData.flatMap(CIImage.init(data:))
+        precondition(serviceQRImage != nil)
+        let serviceQRFeature = detector?.features(in: serviceQRImage!).compactMap { $0 as? CIQRCodeFeature }.first
+        precondition(serviceQRFeature?.messageString == qrText)
         let macIconSets = try FileOperations.createMacIconSets([imageURL])
         precondition(macIconSets.count == 1)
         precondition(FileManager.default.fileExists(atPath: macIconSets[0].appendingPathComponent("icon_512x512@2x.png").path))

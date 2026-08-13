@@ -19,10 +19,12 @@ struct VibeRightApplication {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: MainWindowController?
     private var statusItem: NSStatusItem?
+    private let textServiceProvider = TextServiceProvider()
     private var handledLaunchAction = false
     private var launchSettingsWorkItem: DispatchWorkItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.servicesProvider = textServiceProvider
         ConfigStore.shared.reload()
         DistributedNotificationCenter.default().addObserver(
             self,
@@ -31,6 +33,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
         updateStatusItemVisibility()
+        let isDefaultLaunch = (notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? NSNumber)?.boolValue ?? true
+        guard isDefaultLaunch else { return }
         let item = DispatchWorkItem { [weak self] in
             guard let self, !self.handledLaunchAction else { return }
             self.showSettings()
