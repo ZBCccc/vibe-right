@@ -89,7 +89,9 @@ final class FinderSync: FIFinderSync {
         nextActionTag = 10_000
         let selectionURLs = selectedURLs()
         let contextURLs = FinderScope.contextURLs(selected: selectionURLs, targeted: targetedURL())
-        guard !contextURLs.isEmpty else { return nil }
+        guard !contextURLs.isEmpty else {
+            return menuKind == .toolbarItemMenu ? noContextToolbarMenu() : nil
+        }
         if !store.config.includeExternalVolumes, contextURLs.contains(where: FinderScope.isExternalVolume) {
             return nil
         }
@@ -118,6 +120,19 @@ final class FinderSync: FIFinderSync {
             addSelectionTools(to: menu)
         }
 
+        menu.addItem(actionItem(title: "打开灵犀右键设置", symbol: "gearshape", payload: "settings"))
+        return menu
+    }
+
+    private func noContextToolbarMenu() -> NSMenu {
+        let menu = NSMenu(title: L10n.text("灵犀右键"))
+        let prompt = NSMenuItem(title: L10n.text("请先选择文件或文件夹"), action: nil, keyEquivalent: "")
+        prompt.image = image("cursorarrow.click.2")
+        prompt.isEnabled = false
+        menu.addItem(prompt)
+        if store.config.favoritesEnabled, store.config.favorites.contains(where: \.enabled) {
+            menu.addItem(commonDirectoryMenu())
+        }
         menu.addItem(actionItem(title: "打开灵犀右键设置", symbol: "gearshape", payload: "settings"))
         return menu
     }
