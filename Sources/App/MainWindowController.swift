@@ -283,15 +283,27 @@ final class MainViewController: NSViewController {
             }
             toggle.setContentHuggingPriority(.defaultLow, for: .horizontal)
             row.addArrangedSubview(toggle)
+
+            let mainMenu = NSButton(checkboxWithTitle: "主菜单", target: nil, action: nil)
+            mainMenu.toolTip = "直接显示在 Finder 右键主菜单，不收入“新建文件”子菜单"
+            mainMenu.state = template.showInMainMenu ? .on : .off
+            bind(mainMenu) { [weak self] control in
+                self?.updateConfig {
+                    $0.templates[index].showInMainMenu = (control as! NSButton).state == .on
+                }
+            }
+            row.addArrangedSubview(mainMenu)
+
+            row.addArrangedSubview(iconButton(symbol: "pencil", accessibilityLabel: "重命名模板") { [weak self] in
+                self?.renameTemplate(at: index)
+            })
+            row.addArrangedSubview(reorderButtons(index: index, count: store.config.templates.count) { [weak self] offset in
+                self?.moveTemplate(at: index, offset: offset)
+            })
             if template.templatePath != nil {
-                let remove = NSButton(
-                    image: NSImage(systemSymbolName: "trash", accessibilityDescription: "移除模板") ?? NSImage(),
-                    target: nil,
-                    action: nil
-                )
-                remove.isBordered = false
-                bind(remove) { [weak self] _ in self?.removeTemplate(at: index) }
-                row.addArrangedSubview(remove)
+                row.addArrangedSubview(iconButton(symbol: "trash", accessibilityLabel: "移除模板") { [weak self] in
+                    self?.removeTemplate(at: index)
+                })
             }
             list.addArrangedSubview(row)
             if index < store.config.templates.count - 1 { list.addArrangedSubview(divider()) }
@@ -330,6 +342,8 @@ final class MainViewController: NSViewController {
             setEnabled: { [weak self] index, value in
                 self?.updateConfig { $0.destinations[index].enabled = value }
             },
+            rename: { [weak self] index in self?.renameDestination(at: index, inFavorites: false) },
+            move: { [weak self] index, offset in self?.moveDestination(at: index, offset: offset, inFavorites: false) },
             remove: { [weak self] index in
                 self?.updateConfig { $0.destinations.remove(at: index) }
                 self?.renderSelectedSection()
@@ -359,6 +373,8 @@ final class MainViewController: NSViewController {
             setEnabled: { [weak self] index, value in
                 self?.updateConfig { $0.favorites[index].enabled = value }
             },
+            rename: { [weak self] index in self?.renameDestination(at: index, inFavorites: true) },
+            move: { [weak self] index, offset in self?.moveDestination(at: index, offset: offset, inFavorites: true) },
             remove: { [weak self] index in
                 self?.updateConfig { $0.favorites.remove(at: index) }
                 self?.renderSelectedSection()
@@ -375,6 +391,8 @@ final class MainViewController: NSViewController {
     private func destinationList(
         _ destinations: [Destination],
         setEnabled: @escaping (Int, Bool) -> Void,
+        rename: @escaping (Int) -> Void,
+        move: @escaping (Int, Int) -> Void,
         remove: @escaping (Int) -> Void
     ) -> NSStackView {
         let list = verticalStack()
@@ -392,14 +410,15 @@ final class MainViewController: NSViewController {
             let path = label(destination.path, size: 12, color: .secondaryLabelColor)
             path.setContentHuggingPriority(.defaultLow, for: .horizontal)
             row.addArrangedSubview(path)
-            let removeButton = NSButton(
-                image: NSImage(systemSymbolName: "trash", accessibilityDescription: "移除") ?? NSImage(),
-                target: nil,
-                action: nil
-            )
-            removeButton.isBordered = false
-            bind(removeButton) { _ in remove(index) }
-            row.addArrangedSubview(removeButton)
+            row.addArrangedSubview(iconButton(symbol: "pencil", accessibilityLabel: "重命名") {
+                rename(index)
+            })
+            row.addArrangedSubview(reorderButtons(index: index, count: destinations.count) { offset in
+                move(index, offset)
+            })
+            row.addArrangedSubview(iconButton(symbol: "trash", accessibilityLabel: "移除") {
+                remove(index)
+            })
             list.addArrangedSubview(row)
             if index < destinations.count - 1 { list.addArrangedSubview(divider()) }
         }
@@ -471,9 +490,14 @@ final class MainViewController: NSViewController {
     private func renderTools() {
         contentStack.addArrangedSubview(descriptionLabel("只保留你真正使用的动作。更改会在下一次打开 Finder 右键菜单时生效。"))
         let list = verticalStack()
-        for (index, tool) in ToolActionID.settingsCases.enumerated() {
-            list.addArrangedSubview(switchRow(
-                title: tool.title,
+        let orderedTools = store.config.toolOrder
+        for (index, tool) in orderedTools.enumerated() {
+            let row = NSStackView()
+            row.orientation = .horizontal
+            row.alignment = .centerY
+            row.spacing = 8
+            let toggle = switchRow(
+                title: store.config.title(for: tool),
                 subtitle: toolSubtitle(tool),
                 value: store.config.enabledTools.contains(tool),
                 symbol: tool.symbolName
@@ -482,8 +506,22 @@ final class MainViewController: NSViewController {
                     if value { config.enabledTools.insert(tool) }
                     else { config.enabledTools.remove(tool) }
                 }
+            }
+            toggle.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            row.addArrangedSubview(toggle)
+            row.addArrangedSubview(iconButton(symbol: "pencil", accessibilityLabel: "自定义工具名称") { [weak self] in
+                self?.renameTool(at: index)
             })
-            if index < ToolActionID.settingsCases.count - 1 { list.addArrangedSubview(divider()) }
+            if store.config.toolCustomTitles[tool.rawValue] != nil {
+                row.addArrangedSubview(iconButton(symbol: "arrow.uturn.backward", accessibilityLabel: "恢复默认名称") { [weak self] in
+                    self?.resetToolTitle(tool)
+                })
+            }
+            row.addArrangedSubview(reorderButtons(index: index, count: orderedTools.count) { [weak self] offset in
+                self?.moveTool(at: index, offset: offset)
+            })
+            list.addArrangedSubview(row)
+            if index < orderedTools.count - 1 { list.addArrangedSubview(divider()) }
         }
         contentStack.addArrangedSubview(card(title: "Finder 动作", symbol: "wrench.and.screwdriver", content: list))
 
@@ -521,6 +559,29 @@ final class MainViewController: NSViewController {
         ) { [weak self] value in self?.updateConfig { $0.mergeApplicationActions = value } })
         contentStack.addArrangedSubview(card(title: "菜单分组", symbol: "rectangle.3.group", content: grouping))
 
+        let terminalBehavior = verticalStack()
+        let modes = TerminalOpenMode.allCases
+        terminalBehavior.addArrangedSubview(selectionRow(
+            title: "系统终端打开方式",
+            subtitle: "选择每次在新窗口或当前窗口的新标签页中打开",
+            options: modes.map(\.title),
+            selectedIndex: modes.firstIndex(of: store.config.terminalOpenMode) ?? 0
+        ) { [weak self] index in
+            guard modes.indices.contains(index) else { return }
+            self?.updateConfig { $0.terminalOpenMode = modes[index] }
+        })
+        terminalBehavior.addArrangedSubview(divider())
+        terminalBehavior.addArrangedSubview(selectionRow(
+            title: "iTerm2 打开方式",
+            subtitle: "选择每次在新窗口或当前窗口的新标签页中打开",
+            options: modes.map(\.title),
+            selectedIndex: modes.firstIndex(of: store.config.iTermOpenMode) ?? 0
+        ) { [weak self] index in
+            guard modes.indices.contains(index) else { return }
+            self?.updateConfig { $0.iTermOpenMode = modes[index] }
+        })
+        contentStack.addArrangedSubview(card(title: "终端行为", symbol: "terminal", content: terminalBehavior))
+
         let applications = verticalStack()
         for (index, application) in store.config.applications.enumerated() {
             let row = NSStackView()
@@ -548,6 +609,13 @@ final class MainViewController: NSViewController {
             ))
             text.setContentHuggingPriority(.defaultLow, for: .horizontal)
             row.addArrangedSubview(text)
+
+            row.addArrangedSubview(iconButton(symbol: "pencil", accessibilityLabel: "重命名应用入口") { [weak self] in
+                self?.renameApplication(at: index)
+            })
+            row.addArrangedSubview(reorderButtons(index: index, count: store.config.applications.count) { [weak self] offset in
+                self?.moveApplication(at: index, offset: offset)
+            })
 
             if !application.isBuiltIn {
                 let remove = NSButton(
@@ -666,6 +734,109 @@ final class MainViewController: NSViewController {
             renderSelectedSection()
         } catch {
             showError(error)
+        }
+    }
+
+    private func renameTemplate(at index: Int) {
+        guard store.config.templates.indices.contains(index) else { return }
+        promptForName(title: "重命名模板", currentValue: store.config.templates[index].name) { [weak self] name in
+            self?.updateConfig { $0.templates[index].name = name }
+            self?.renderSelectedSection()
+        }
+    }
+
+    private func moveTemplate(at index: Int, offset: Int) {
+        let target = index + offset
+        guard store.config.templates.indices.contains(index), store.config.templates.indices.contains(target) else { return }
+        updateConfig { $0.templates.swapAt(index, target) }
+        renderSelectedSection()
+    }
+
+    private func renameDestination(at index: Int, inFavorites: Bool) {
+        let destinations = inFavorites ? store.config.favorites : store.config.destinations
+        guard destinations.indices.contains(index) else { return }
+        promptForName(
+            title: inFavorites ? "重命名常用目录" : "重命名传送目录",
+            currentValue: destinations[index].name
+        ) { [weak self] name in
+            self?.updateConfig { config in
+                if inFavorites { config.favorites[index].name = name }
+                else { config.destinations[index].name = name }
+            }
+            self?.renderSelectedSection()
+        }
+    }
+
+    private func moveDestination(at index: Int, offset: Int, inFavorites: Bool) {
+        let target = index + offset
+        let destinations = inFavorites ? store.config.favorites : store.config.destinations
+        guard destinations.indices.contains(index), destinations.indices.contains(target) else { return }
+        updateConfig { config in
+            if inFavorites { config.favorites.swapAt(index, target) }
+            else { config.destinations.swapAt(index, target) }
+        }
+        renderSelectedSection()
+    }
+
+    private func renameTool(at index: Int) {
+        guard store.config.toolOrder.indices.contains(index) else { return }
+        let tool = store.config.toolOrder[index]
+        promptForName(title: "自定义工具名称", currentValue: store.config.title(for: tool)) { [weak self] name in
+            self?.updateConfig { config in
+                if name == tool.title { config.toolCustomTitles.removeValue(forKey: tool.rawValue) }
+                else { config.toolCustomTitles[tool.rawValue] = name }
+            }
+            self?.renderSelectedSection()
+        }
+    }
+
+    private func resetToolTitle(_ tool: ToolActionID) {
+        updateConfig { $0.toolCustomTitles.removeValue(forKey: tool.rawValue) }
+        renderSelectedSection()
+    }
+
+    private func moveTool(at index: Int, offset: Int) {
+        let target = index + offset
+        guard store.config.toolOrder.indices.contains(index), store.config.toolOrder.indices.contains(target) else { return }
+        updateConfig { $0.toolOrder.swapAt(index, target) }
+        renderSelectedSection()
+    }
+
+    private func renameApplication(at index: Int) {
+        guard store.config.applications.indices.contains(index) else { return }
+        promptForName(title: "重命名应用入口", currentValue: store.config.applications[index].name) { [weak self] name in
+            self?.updateConfig { $0.applications[index].name = name }
+            self?.renderSelectedSection()
+        }
+    }
+
+    private func moveApplication(at index: Int, offset: Int) {
+        let target = index + offset
+        guard store.config.applications.indices.contains(index), store.config.applications.indices.contains(target) else { return }
+        updateConfig { $0.applications.swapAt(index, target) }
+        renderSelectedSection()
+    }
+
+    private func promptForName(title: String, currentValue: String, completion: @escaping (String) -> Void) {
+        guard let window = view.window else { return }
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = "名称会直接显示在 Finder 菜单中。"
+        alert.addButton(withTitle: "保存")
+        alert.addButton(withTitle: "取消")
+        let field = NSTextField(string: currentValue)
+        field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+        field.selectText(nil)
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        alert.beginSheetModal(for: window) { response in
+            guard response == .alertFirstButtonReturn else { return }
+            let name = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, !name.contains("\n"), !name.contains("\r") else {
+                NSSound.beep()
+                return
+            }
+            completion(name)
         }
     }
 
@@ -809,6 +980,40 @@ final class MainViewController: NSViewController {
         control.action = #selector(ControlAction.invoke(_:))
     }
 
+    private func iconButton(
+        symbol: String,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> NSButton {
+        let button = NSButton(
+            image: NSImage(systemSymbolName: symbol, accessibilityDescription: accessibilityLabel) ?? NSImage(),
+            target: nil,
+            action: nil
+        )
+        button.isBordered = false
+        button.toolTip = accessibilityLabel
+        bind(button) { _ in action() }
+        return button
+    }
+
+    private func reorderButtons(
+        index: Int,
+        count: Int,
+        move: @escaping (Int) -> Void
+    ) -> NSStackView {
+        let controls = NSStackView()
+        controls.orientation = .horizontal
+        controls.alignment = .centerY
+        controls.spacing = 0
+        let up = iconButton(symbol: "chevron.up", accessibilityLabel: "上移") { move(-1) }
+        up.isEnabled = index > 0
+        controls.addArrangedSubview(up)
+        let down = iconButton(symbol: "chevron.down", accessibilityLabel: "下移") { move(1) }
+        down.isEnabled = index + 1 < count
+        controls.addArrangedSubview(down)
+        return controls
+    }
+
     private func switchRow(
         title: String,
         subtitle: String,
@@ -839,6 +1044,32 @@ final class MainViewController: NSViewController {
         toggle.state = value ? .on : .off
         bind(toggle) { control in changed((control as! NSSwitch).state == .on) }
         row.addArrangedSubview(toggle)
+        return row
+    }
+
+    private func selectionRow(
+        title: String,
+        subtitle: String,
+        options: [String],
+        selectedIndex: Int,
+        changed: @escaping (Int) -> Void
+    ) -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 12
+
+        let text = verticalStack(spacing: 3)
+        text.addArrangedSubview(label(title, size: 13, weight: .medium))
+        text.addArrangedSubview(label(subtitle, size: 11, color: .secondaryLabelColor))
+        text.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        row.addArrangedSubview(text)
+
+        let popup = NSPopUpButton(frame: .zero, pullsDown: false)
+        popup.addItems(withTitles: options)
+        popup.selectItem(at: selectedIndex)
+        bind(popup) { control in changed((control as! NSPopUpButton).indexOfSelectedItem) }
+        row.addArrangedSubview(popup)
         return row
     }
 
@@ -915,9 +1146,11 @@ final class MainViewController: NSViewController {
         case .unhideSelected: return "取消隐藏所选项目"
         case .toggleFileExtension: return "切换 Finder 的扩展名显示属性"
         case .repairFilename: return "高置信度识别乱码，预览确认后再重命名"
+        case .generateQRCode: return "把所选项目的绝对路径生成离线 PNG 二维码"
         case .permanentDelete: return "绕过废纸篓删除，默认必须二次确认"
+        case .compress7Z: return "使用系统归档引擎在当前目录生成 7z 压缩包"
         case .compressZIP: return "使用系统 ZIP 工具在当前目录生成压缩包"
-        case .extractArchive: return "将 ZIP 解压到同名目录"
+        case .extractArchive: return "将 ZIP 或 7z 解压到同名目录"
         case .toggleHidden: return "切换 Finder 隐藏属性"
         case .openTerminal: return "在系统终端打开目录"
         case .openWarp: return "使用 Warp 打开目录"

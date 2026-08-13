@@ -1,4 +1,5 @@
 import AppKit
+import CoreImage
 import Foundation
 
 enum FileOperationError: LocalizedError {
@@ -375,35 +376,50 @@ enum FileOperations {
 
     @discardableResult
     static func createZIP(from urls: [URL]) throws -> URL {
-        guard let first = urls.first else { throw FileOperationError.emptySelection }
-        let parent = first.deletingLastPathComponent().standardizedFileURL
-        guard urls.allSatisfy({ $0.deletingLastPathComponent().standardizedFileURL == parent }) else {
-            throw FileOperationError.processFailed("只能压缩同一目录中的项目")
-        }
-        let archiveName = urls.count == 1 ? first.lastPathComponent : "归档"
-        let output = uniqueURL(in: parent, preferredName: archiveName, pathExtension: "zip")
-        let relativePaths = urls.map { "./" + $0.lastPathComponent }
+        let plan = try archivePlan(for: urls, pathExtension: "zip")
         do {
             _ = try runProcess(
                 executable: URL(fileURLWithPath: "/usr/bin/zip"),
-                arguments: ["-r", "-q", output.path] + relativePaths,
-                currentDirectory: parent
+                arguments: ["-r", "-q", plan.output.path] + plan.relativePaths,
+                currentDirectory: plan.parent
             )
         } catch {
-            try? FileManager.default.removeItem(at: output)
+            try? FileManager.default.removeItem(at: plan.output)
             throw error
         }
-        return output
+        return plan.output
     }
 
     @discardableResult
-    static func extractZIP(_ archives: [URL]) throws -> [URL] {
+    static func create7Z(from urls: [URL]) throws -> URL {
+        let plan = try archivePlan(for: urls, pathExtension: "7z")
+        do {
+            _ = try runProcess(
+                executable: URL(fileURLWithPath: "/usr/bin/tar"),
+                arguments: ["-c", "--format", "7zip", "-f", plan.output.path] + plan.relativePaths,
+                currentDirectory: plan.parent
+            )
+        } catch {
+            try? FileManager.default.removeItem(at: plan.output)
+            throw error
+        }
+        return plan.output
+    }
+
+    @discardableResult
+    static func extractArchives(_ archives: [URL]) throws -> [URL] {
         guard !archives.isEmpty else { throw FileOperationError.emptySelection }
         var results: [URL] = []
         for archive in archives {
-            guard archive.pathExtension.lowercased() == "zip" else {
+            guard ["zip", "7z"].contains(archive.pathExtension.lowercased()) else {
                 throw FileOperationError.processFailed("暂不支持解压：\(archive.lastPathComponent)")
             }
+            let entries = try runProcess(
+                executable: URL(fileURLWithPath: "/usr/bin/tar"),
+                arguments: ["-tf", archive.path]
+            ).split(whereSeparator: \.isNewline).map(String.init)
+            try validateArchiveEntries(entries, archive: archive)
+
             let destination = uniqueURL(
                 in: archive.deletingLastPathComponent(),
                 preferredName: archive.deletingPathExtension().lastPathComponent
@@ -411,8 +427,12 @@ enum FileOperations {
             try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
             do {
                 _ = try runProcess(
-                    executable: URL(fileURLWithPath: "/usr/bin/ditto"),
-                    arguments: ["-x", "-k", archive.path, destination.path]
+                    executable: URL(fileURLWithPath: "/usr/bin/tar"),
+                    arguments: [
+                        "-x", "--no-same-owner", "--no-same-permissions",
+                        "-f", archive.path,
+                        "-C", destination.path
+                    ]
                 )
                 results.append(destination)
             } catch {
@@ -421,6 +441,39 @@ enum FileOperations {
             }
         }
         return results
+    }
+
+    private static func archivePlan(
+        for urls: [URL],
+        pathExtension: String
+    ) throws -> (parent: URL, output: URL, relativePaths: [String]) {
+        guard let first = urls.first else { throw FileOperationError.emptySelection }
+        let parent = first.deletingLastPathComponent().standardizedFileURL
+        guard urls.allSatisfy({ $0.deletingLastPathComponent().standardizedFileURL == parent }) else {
+            throw FileOperationError.processFailed("只能压缩同一目录中的项目")
+        }
+        let archiveName = urls.count == 1 ? first.lastPathComponent : "归档"
+        return (
+            parent,
+            uniqueURL(in: parent, preferredName: archiveName, pathExtension: pathExtension),
+            urls.map { "./" + $0.lastPathComponent }
+        )
+    }
+
+    private static func validateArchiveEntries(_ entries: [String], archive: URL) throws {
+        for entry in entries {
+            let normalized = entry.replacingOccurrences(of: "\\", with: "/")
+            let components = normalized.split(separator: "/", omittingEmptySubsequences: true)
+            let hasDrivePrefix = normalized.range(
+                of: #"^[A-Za-z]:/"#,
+                options: .regularExpression
+            ) != nil
+            if normalized.hasPrefix("/") || hasDrivePrefix || components.contains("..") {
+                throw FileOperationError.processFailed(
+                    "压缩包包含不安全路径，已停止解压：\(archive.lastPathComponent)"
+                )
+            }
+        }
     }
 
     static func checksum(of url: URL, algorithm: String) throws -> String {
@@ -456,6 +509,45 @@ enum FileOperations {
             throw FileOperationError.processFailed(output.trimmingCharacters(in: .whitespacesAndNewlines))
         }
         return output.split(separator: " ").first.map(String.init) ?? output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    @discardableResult
+    static func createQRCode(from text: String, in directory: URL) throws -> URL {
+        guard !text.isEmpty else { throw FileOperationError.processFailed("二维码内容不能为空") }
+        guard let filter = CIFilter(name: "CIQRCodeGenerator") else {
+            throw FileOperationError.processFailed("当前系统不支持生成二维码")
+        }
+        filter.setValue(Data(text.utf8), forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        guard let source = filter.outputImage else {
+            throw FileOperationError.processFailed("二维码生成失败")
+        }
+
+        let scaled = source.transformed(by: CGAffineTransform(scaleX: 12, y: 12))
+        let margin: CGFloat = 48
+        let bounds = CGRect(
+            x: 0,
+            y: 0,
+            width: scaled.extent.width + margin * 2,
+            height: scaled.extent.height + margin * 2
+        )
+        let positioned = scaled.transformed(by: CGAffineTransform(
+            translationX: margin - scaled.extent.minX,
+            y: margin - scaled.extent.minY
+        ))
+        let background = CIImage(color: CIColor.white).cropped(to: bounds)
+        let image = positioned.composited(over: background)
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(image, from: bounds.integral) else {
+            throw FileOperationError.processFailed("二维码渲染失败")
+        }
+        let representation = NSBitmapImageRep(cgImage: cgImage)
+        guard let data = representation.representation(using: .png, properties: [:]) else {
+            throw FileOperationError.processFailed("二维码编码失败")
+        }
+        let output = uniqueURL(in: directory, preferredName: "二维码", pathExtension: "png")
+        try data.write(to: output, options: .atomic)
+        return output
     }
 
     static func convertImages(_ urls: [URL], to type: NSBitmapImageRep.FileType) throws {

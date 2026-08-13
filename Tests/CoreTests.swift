@@ -1,3 +1,5 @@
+import AppKit
+import CoreImage
 import Foundation
 
 @main
@@ -77,12 +79,33 @@ struct CoreTests {
 
         let configURL = root.appendingPathComponent("config.json")
         let store = ConfigStore(configURL: configURL)
-        try store.update { $0.playSound = false }
+        try store.update {
+            $0.playSound = false
+            $0.terminalOpenMode = .tab
+            $0.iTermOpenMode = .tab
+            $0.templates[0].showInMainMenu = true
+            $0.destinations[0].name = "下载目录"
+            $0.destinations.swapAt(0, 1)
+            $0.toolOrder.removeAll { $0 == .copyPath }
+            $0.toolOrder.insert(.copyPath, at: 0)
+            $0.toolCustomTitles[ToolActionID.copyPath.rawValue] = "复制完整路径"
+            $0.applications.swapAt(0, 1)
+            $0.applications[1].name = "系统终端"
+        }
         let reloaded = ConfigStore(configURL: configURL)
         precondition(reloaded.config.playSound == false)
-        precondition(reloaded.config.schemaVersion == 13)
+        precondition(reloaded.config.schemaVersion == AppConfig.defaults.schemaVersion)
         precondition(reloaded.config.favorites == AppConfig.defaultFavorites)
-        precondition(reloaded.config.applications == AppConfig.defaultApplications)
+        precondition(reloaded.config.applications[0].id == "iterm2")
+        precondition(reloaded.config.applications[1].id == "terminal")
+        precondition(reloaded.config.applications[1].name == "系统终端")
+        precondition(reloaded.config.toolOrder.first == .copyPath)
+        precondition(reloaded.config.title(for: .copyPath) == "复制完整路径")
+        precondition(reloaded.config.orderedTools(from: [.copyName, .copyPath]) == [.copyPath, .copyName])
+        precondition(reloaded.config.terminalOpenMode == .tab)
+        precondition(reloaded.config.iTermOpenMode == .tab)
+        precondition(reloaded.config.templates[0].showInMainMenu)
+        precondition(reloaded.config.destinations[1].name == "下载目录")
         precondition(reloaded.config.enabledIconPresets == Set(FileIconPreset.allCases))
         precondition(reloaded.config.showMenuBarIcon)
         precondition(!reloaded.config.includeExternalVolumes)
@@ -92,6 +115,10 @@ struct CoreTests {
         precondition(!reloaded.config.hideCutItems)
         precondition(reloaded.config.pendingCutPaths.isEmpty)
         precondition(!reloaded.config.pendingCutItemsHidden)
+        precondition(Set(AppConfig.defaultApplications.map(\.id)).count == AppConfig.defaultApplications.count)
+        precondition(AppConfig.defaultApplications.contains(where: { $0.id == "sublime-text" }))
+        precondition(AppConfig.defaultApplications.contains(where: { $0.id == "android-studio" }))
+        precondition(AppConfig.defaultApplications.contains(where: { $0.id == "rubymine" }))
 
         let legacyConfigURL = root.appendingPathComponent("legacy-config.json")
         let legacyConfig = """
@@ -106,7 +133,7 @@ struct CoreTests {
         """
         try Data(legacyConfig.utf8).write(to: legacyConfigURL)
         let migrated = ConfigStore(configURL: legacyConfigURL)
-        precondition(migrated.config.schemaVersion == 13)
+        precondition(migrated.config.schemaVersion == AppConfig.defaults.schemaVersion)
         precondition(migrated.config.enabledTools.contains(.cut))
         precondition(migrated.config.templates.contains(where: { $0.id == "rtf" }))
         precondition(migrated.config.templates.contains(where: { $0.id == "xml" }))
@@ -117,6 +144,7 @@ struct CoreTests {
         precondition(migrated.config.enabledTools.contains(.shareAirDrop))
         precondition(migrated.config.enabledTools.contains(.dissolveFolder))
         precondition(migrated.config.enabledTools.contains(.toggleFileExtension))
+        precondition(migrated.config.enabledTools.contains(.generateQRCode))
         try migrated.update { config in
             for id in ["cursor", "warp", "iterm2"] {
                 if let index = config.applications.firstIndex(where: { $0.id == id }) {
@@ -145,7 +173,7 @@ struct CoreTests {
         """
         try Data(version2Config.utf8).write(to: version2ConfigURL)
         let version2Migrated = ConfigStore(configURL: version2ConfigURL)
-        precondition(version2Migrated.config.schemaVersion == 13)
+        precondition(version2Migrated.config.schemaVersion == AppConfig.defaults.schemaVersion)
         precondition(version2Migrated.config.applications.first(where: { $0.id == "cursor" })?.enabled == false)
         precondition(version2Migrated.config.applications.first(where: { $0.id == "warp" })?.enabled == true)
         precondition(version2Migrated.config.applications.first(where: { $0.id == "iterm2" })?.enabled == true)
@@ -167,10 +195,64 @@ struct CoreTests {
         """
         try Data(version3Config.utf8).write(to: version3ConfigURL)
         let version3Migrated = ConfigStore(configURL: version3ConfigURL)
-        precondition(version3Migrated.config.schemaVersion == 13)
+        precondition(version3Migrated.config.schemaVersion == AppConfig.defaults.schemaVersion)
         precondition(version3Migrated.config.favorites == version3Migrated.config.destinations)
         precondition(version3Migrated.config.applications.first(where: { $0.id == "cursor" })?.enabled == true)
         precondition(version3Migrated.config.enabledTools.contains(.shareAirDrop))
+
+        let version13ConfigURL = root.appendingPathComponent("version-13-config.json")
+        let version13Config = """
+        {
+          "schemaVersion": 13,
+          "templates": [
+            {"id": "txt", "name": "TXT", "fileExtension": "txt", "enabled": true, "isDirectory": false}
+          ],
+          "applications": [
+            {
+              "id": "terminal",
+              "name": "终端",
+              "bundleIdentifiers": ["com.apple.Terminal"],
+              "symbolName": "terminal",
+              "enabled": false,
+              "isBuiltIn": true
+            }
+          ],
+          "enabledTools": ["copyPath"]
+        }
+        """
+        try Data(version13Config.utf8).write(to: version13ConfigURL)
+        let version13Migrated = ConfigStore(configURL: version13ConfigURL)
+        precondition(version13Migrated.config.schemaVersion == AppConfig.defaults.schemaVersion)
+        precondition(version13Migrated.config.applications.first(where: { $0.id == "terminal" })?.enabled == false)
+        precondition(version13Migrated.config.applications.contains(where: { $0.id == "sublime-text" }))
+        precondition(version13Migrated.config.enabledTools.contains(.generateQRCode))
+        precondition(version13Migrated.config.templates[0].showInMainMenu == false)
+        precondition(version13Migrated.config.terminalOpenMode == .window)
+        precondition(version13Migrated.config.iTermOpenMode == .window)
+
+        let automationDirectory = root.appendingPathComponent("quoted \"folder\" & line\nnext", isDirectory: true)
+        try FileManager.default.createDirectory(at: automationDirectory, withIntermediateDirectories: true)
+        let terminalRequest = TerminalLaunchRequest(
+            application: .terminal,
+            mode: .tab,
+            directories: [automationDirectory]
+        )
+        let terminalURL = TerminalAutomation.requestURL(for: terminalRequest)
+        precondition(terminalURL != nil)
+        precondition(TerminalAutomation.parseRequestURL(terminalURL!) == terminalRequest)
+        precondition(TerminalAutomation.serviceName(for: .terminal, mode: .window) == "New Terminal at Folder")
+        precondition(TerminalAutomation.serviceName(for: .terminal, mode: .tab) == "New Terminal Tab at Folder")
+
+        let iTermRequest = TerminalLaunchRequest(
+            application: .iTerm2,
+            mode: .window,
+            directories: [automationDirectory]
+        )
+        let iTermURL = TerminalAutomation.requestURL(for: iTermRequest)
+        precondition(iTermURL != nil)
+        precondition(TerminalAutomation.parseRequestURL(iTermURL!) == iTermRequest)
+        precondition(TerminalAutomation.serviceName(for: .iTerm2, mode: .window) == "New iTerm2 Window Here")
+        precondition(TerminalAutomation.serviceName(for: .iTerm2, mode: .tab) == "New iTerm2 Tab Here")
 
         let hiddenFile = root.appendingPathComponent("visibility.txt")
         try Data("visible".utf8).write(to: hiddenFile)
@@ -221,10 +303,19 @@ struct CoreTests {
         try Data("B".utf8).write(to: archiveB)
         let archive = try FileOperations.createZIP(from: [archiveA, archiveB])
         precondition(FileManager.default.fileExists(atPath: archive.path))
-        let extracted = try FileOperations.extractZIP([archive])
+        let extracted = try FileOperations.extractArchives([archive])
         precondition(extracted.count == 1)
         precondition(FileManager.default.fileExists(atPath: extracted[0].appendingPathComponent("a.txt").path))
         precondition(FileManager.default.fileExists(atPath: extracted[0].appendingPathComponent("b.txt").path))
+
+        let sevenZipArchive = try FileOperations.create7Z(from: [archiveA, archiveB])
+        precondition(FileManager.default.fileExists(atPath: sevenZipArchive.path))
+        let sevenZipExtracted = try FileOperations.extractArchives([sevenZipArchive])
+        precondition(sevenZipExtracted.count == 1)
+        let sevenZipA = try Data(contentsOf: sevenZipExtracted[0].appendingPathComponent("a.txt"))
+        let sevenZipB = try Data(contentsOf: sevenZipExtracted[0].appendingPathComponent("b.txt"))
+        precondition(String(data: sevenZipA, encoding: .utf8) == "A")
+        precondition(String(data: sevenZipB, encoding: .utf8) == "B")
 
         let disposable = root.appendingPathComponent("delete-me.txt")
         try Data("delete".utf8).write(to: disposable)
@@ -234,6 +325,20 @@ struct CoreTests {
         let imageURL = root.appendingPathComponent("pixel.png")
         let pixelPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")!
         try pixelPNG.write(to: imageURL)
+        let qrText = "https://example.com/path?name=灵犀右键"
+        let qrCode = try FileOperations.createQRCode(from: qrText, in: root)
+        precondition(FileManager.default.fileExists(atPath: qrCode.path))
+        let qrImage = CIImage(contentsOf: qrCode)
+        precondition(qrImage != nil)
+        let detector = CIDetector(
+            ofType: CIDetectorTypeQRCode,
+            context: CIContext(),
+            options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]
+        )
+        let qrFeature = detector?.features(in: qrImage!).compactMap { $0 as? CIQRCodeFeature }.first
+        precondition(qrFeature?.messageString == qrText)
+        let secondQRCode = try FileOperations.createQRCode(from: qrText, in: root)
+        precondition(secondQRCode.lastPathComponent == "二维码 2.png")
         let macIconSets = try FileOperations.createMacIconSets([imageURL])
         precondition(macIconSets.count == 1)
         precondition(FileManager.default.fileExists(atPath: macIconSets[0].appendingPathComponent("icon_512x512@2x.png").path))

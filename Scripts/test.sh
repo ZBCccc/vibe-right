@@ -8,8 +8,10 @@ mkdir -p "$BUILD_DIR"
 swiftc \
   -swift-version 5 \
   -framework AppKit \
+  -framework CoreImage \
   "$ROOT_DIR/Sources/Core/Models.swift" \
   "$ROOT_DIR/Sources/Core/FileOperations.swift" \
+  "$ROOT_DIR/Sources/Core/TerminalAutomation.swift" \
   "$ROOT_DIR/Tests/CoreTests.swift" \
   -o "$BUILD_DIR/CoreTests"
 

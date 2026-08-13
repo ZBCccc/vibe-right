@@ -7,6 +7,40 @@ struct FileTemplate: Codable, Equatable, Identifiable {
     var enabled: Bool
     var isDirectory: Bool
     var templatePath: String? = nil
+    var showInMainMenu: Bool
+
+    init(
+        id: String,
+        name: String,
+        fileExtension: String,
+        enabled: Bool,
+        isDirectory: Bool,
+        templatePath: String? = nil,
+        showInMainMenu: Bool = false
+    ) {
+        self.id = id
+        self.name = name
+        self.fileExtension = fileExtension
+        self.enabled = enabled
+        self.isDirectory = isDirectory
+        self.templatePath = templatePath
+        self.showInMainMenu = showInMainMenu
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, fileExtension, enabled, isDirectory, templatePath, showInMainMenu
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        name = try values.decode(String.self, forKey: .name)
+        fileExtension = try values.decode(String.self, forKey: .fileExtension)
+        enabled = try values.decode(Bool.self, forKey: .enabled)
+        isDirectory = try values.decode(Bool.self, forKey: .isDirectory)
+        templatePath = try values.decodeIfPresent(String.self, forKey: .templatePath)
+        showInMainMenu = try values.decodeIfPresent(Bool.self, forKey: .showInMainMenu) ?? false
+    }
 }
 
 struct Destination: Codable, Equatable, Identifiable {
@@ -35,6 +69,35 @@ struct ExternalApplication: Codable, Equatable, Identifiable {
     var symbolName: String
     var enabled: Bool
     var isBuiltIn: Bool
+
+    static func builtIn(
+        _ id: String,
+        _ name: String,
+        _ bundleIdentifiers: [String],
+        symbol: String = "app",
+        enabled: Bool = false
+    ) -> ExternalApplication {
+        ExternalApplication(
+            id: id,
+            name: name,
+            bundleIdentifiers: bundleIdentifiers,
+            symbolName: symbol,
+            enabled: enabled,
+            isBuiltIn: true
+        )
+    }
+}
+
+enum TerminalOpenMode: String, Codable, CaseIterable {
+    case window
+    case tab
+
+    var title: String {
+        switch self {
+        case .window: return "新窗口"
+        case .tab: return "新标签页"
+        }
+    }
 }
 
 enum FileIconPreset: String, Codable, CaseIterable, Identifiable {
@@ -110,7 +173,9 @@ enum ToolActionID: String, Codable, CaseIterable {
     case unhideSelected
     case toggleFileExtension
     case repairFilename
+    case generateQRCode
     case permanentDelete
+    case compress7Z
     case compressZIP
     case extractArchive
     // Retained only so version 1-3 configuration files remain decodable.
@@ -148,7 +213,9 @@ enum ToolActionID: String, Codable, CaseIterable {
         case .unhideSelected: return "取消隐藏已选文件"
         case .toggleFileExtension: return "隐藏/显示文件扩展名"
         case .repairFilename: return "修复乱码文件名"
+        case .generateQRCode: return "根据路径生成二维码"
         case .permanentDelete: return "彻底删除"
+        case .compress7Z: return "压缩为 7z"
         case .compressZIP: return "压缩为 ZIP"
         case .extractArchive: return "解压到当前文件夹"
         case .toggleHidden: return "隐藏/取消隐藏"
@@ -185,8 +252,9 @@ enum ToolActionID: String, Codable, CaseIterable {
         case .unhideAll, .unhideSelected: return "eye"
         case .toggleFileExtension: return "character.cursor.ibeam"
         case .repairFilename: return "textformat.abc.dottedunderline"
+        case .generateQRCode: return "qrcode"
         case .permanentDelete: return "trash.slash"
-        case .compressZIP: return "archivebox"
+        case .compress7Z, .compressZIP: return "archivebox"
         case .extractArchive: return "archivebox.fill"
         case .toggleHidden: return "eye.slash"
         case .openTerminal: return "terminal"
@@ -218,7 +286,9 @@ enum ToolActionID: String, Codable, CaseIterable {
         .hideSelected,
         .toggleFileExtension,
         .repairFilename,
+        .generateQRCode,
         .permanentDelete,
+        .compress7Z,
         .compressZIP,
         .extractArchive,
         .convertWebP,
@@ -240,6 +310,8 @@ struct AppConfig: Codable, Equatable {
     var enabledIconPresets: Set<FileIconPreset>
     var customIcons: [CustomFileIcon]
     var enabledTools: Set<ToolActionID>
+    var toolOrder: [ToolActionID]
+    var toolCustomTitles: [String: String]
     var showIcons: Bool
     var showMenuBarIcon: Bool
     var includeExternalVolumes: Bool
@@ -255,6 +327,8 @@ struct AppConfig: Codable, Equatable {
     var hideCutItems: Bool
     var pendingCutPaths: [String]
     var pendingCutItemsHidden: Bool
+    var terminalOpenMode: TerminalOpenMode
+    var iTermOpenMode: TerminalOpenMode
 
     static let defaultTemplates = [
         FileTemplate(id: "folder", name: "文件夹", fileExtension: "", enabled: true, isDirectory: true),
@@ -284,66 +358,37 @@ struct AppConfig: Codable, Equatable {
     ]
 
     static let defaultApplications = [
-        ExternalApplication(
-            id: "terminal",
-            name: "终端",
-            bundleIdentifiers: ["com.apple.Terminal"],
-            symbolName: "terminal",
-            enabled: true,
-            isBuiltIn: true
-        ),
-        ExternalApplication(
-            id: "iterm2",
-            name: "iTerm2",
-            bundleIdentifiers: ["com.googlecode.iterm2"],
-            symbolName: "terminal.fill",
-            enabled: true,
-            isBuiltIn: true
-        ),
-        ExternalApplication(
-            id: "warp",
-            name: "Warp",
-            bundleIdentifiers: ["dev.warp.Warp-Stable", "dev.warp.Warp"],
-            symbolName: "terminal.fill",
-            enabled: true,
-            isBuiltIn: true
-        ),
-        ExternalApplication(
-            id: "vscode",
-            name: "Visual Studio Code",
-            bundleIdentifiers: ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders"],
-            symbolName: "chevron.left.forwardslash.chevron.right",
-            enabled: true,
-            isBuiltIn: true
-        ),
-        ExternalApplication(
-            id: "cursor",
-            name: "Cursor",
-            bundleIdentifiers: ["com.todesktop.230313mzl4w4u92"],
-            symbolName: "cursorarrow.rays",
-            enabled: true,
-            isBuiltIn: true
-        ),
-        ExternalApplication(
-            id: "goland",
-            name: "GoLand",
-            bundleIdentifiers: ["com.jetbrains.goland"],
-            symbolName: "hammer",
-            enabled: true,
-            isBuiltIn: true
-        ),
-        ExternalApplication(
-            id: "obsidian",
-            name: "Obsidian",
-            bundleIdentifiers: ["md.obsidian"],
-            symbolName: "diamond",
-            enabled: false,
-            isBuiltIn: true
-        )
+        ExternalApplication.builtIn("terminal", "终端", ["com.apple.Terminal"], symbol: "terminal", enabled: true),
+        ExternalApplication.builtIn("iterm2", "iTerm2", ["com.googlecode.iterm2"], symbol: "terminal.fill", enabled: true),
+        ExternalApplication.builtIn("warp", "Warp", ["dev.warp.Warp-Stable", "dev.warp.Warp"], symbol: "terminal.fill", enabled: true),
+        ExternalApplication.builtIn("vscode", "Visual Studio Code", ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders"], symbol: "chevron.left.forwardslash.chevron.right", enabled: true),
+        ExternalApplication.builtIn("cursor", "Cursor", ["com.todesktop.230313mzl4w4u92"], symbol: "cursorarrow.rays", enabled: true),
+        ExternalApplication.builtIn("goland", "GoLand", ["com.jetbrains.goland"], symbol: "hammer", enabled: true),
+        ExternalApplication.builtIn("sublime-text", "Sublime Text", ["com.sublimetext.4", "com.sublimetext.3"]),
+        ExternalApplication.builtIn("sublime-merge", "Sublime Merge", ["com.sublimemerge"]),
+        ExternalApplication.builtIn("marktext", "MarkText", ["com.github.marktext.marktext"]),
+        ExternalApplication.builtIn("obsidian", "Obsidian", ["md.obsidian"], symbol: "diamond"),
+        ExternalApplication.builtIn("tabby", "Tabby", ["org.tabby", "org.tabby-terminal"]),
+        ExternalApplication.builtIn("visual-studio", "Visual Studio", ["com.microsoft.visual-studio"]),
+        ExternalApplication.builtIn("hyper", "Hyper", ["co.zeit.hyper"]),
+        ExternalApplication.builtIn("emacs", "Emacs", ["org.gnu.Emacs"]),
+        ExternalApplication.builtIn("clion", "CLion", ["com.jetbrains.CLion"], symbol: "hammer"),
+        ExternalApplication.builtIn("coteditor", "CotEditor", ["com.coteditor.CotEditor"]),
+        ExternalApplication.builtIn("hbuilderx", "HBuilderX", ["io.dcloud.HBuilderX", "com.dcloud.HBuilderX"]),
+        ExternalApplication.builtIn("phpstorm", "PhpStorm", ["com.jetbrains.PhpStorm"], symbol: "hammer"),
+        ExternalApplication.builtIn("pycharm", "PyCharm", ["com.jetbrains.PyCharm", "com.jetbrains.pycharm"], symbol: "hammer"),
+        ExternalApplication.builtIn("typora", "Typora", ["abnerworks.Typora"]),
+        ExternalApplication.builtIn("webstorm", "WebStorm", ["com.jetbrains.WebStorm"], symbol: "hammer"),
+        ExternalApplication.builtIn("idea", "IntelliJ IDEA", ["com.jetbrains.intellij", "com.jetbrains.intellij.ce"], symbol: "hammer"),
+        ExternalApplication.builtIn("android-studio", "Android Studio", ["com.google.android.studio"], symbol: "hammer"),
+        ExternalApplication.builtIn("appcode", "AppCode", ["com.jetbrains.AppCode"], symbol: "hammer"),
+        ExternalApplication.builtIn("datagrip", "DataGrip", ["com.jetbrains.datagrip"], symbol: "hammer"),
+        ExternalApplication.builtIn("rider", "Rider", ["com.jetbrains.rider"], symbol: "hammer"),
+        ExternalApplication.builtIn("rubymine", "RubyMine", ["com.jetbrains.rubymine"], symbol: "hammer")
     ]
 
     static let defaults = AppConfig(
-        schemaVersion: 13,
+        schemaVersion: 18,
         templates: defaultTemplates,
         destinations: defaultDestinations,
         favorites: defaultFavorites,
@@ -351,6 +396,8 @@ struct AppConfig: Codable, Equatable {
         enabledIconPresets: Set(FileIconPreset.allCases),
         customIcons: [],
         enabledTools: Set(ToolActionID.settingsCases),
+        toolOrder: ToolActionID.settingsCases,
+        toolCustomTitles: [:],
         showIcons: true,
         showMenuBarIcon: true,
         includeExternalVolumes: false,
@@ -365,7 +412,9 @@ struct AppConfig: Codable, Equatable {
         mergeApplicationActions: false,
         hideCutItems: false,
         pendingCutPaths: [],
-        pendingCutItemsHidden: false
+        pendingCutItemsHidden: false,
+        terminalOpenMode: .window,
+        iTermOpenMode: .window
     )
 
     enum CodingKeys: String, CodingKey {
@@ -377,6 +426,8 @@ struct AppConfig: Codable, Equatable {
         case enabledIconPresets
         case customIcons
         case enabledTools
+        case toolOrder
+        case toolCustomTitles
         case showIcons
         case showMenuBarIcon
         case includeExternalVolumes
@@ -392,6 +443,8 @@ struct AppConfig: Codable, Equatable {
         case hideCutItems
         case pendingCutPaths
         case pendingCutItemsHidden
+        case terminalOpenMode
+        case iTermOpenMode
     }
 
     init(
@@ -403,6 +456,8 @@ struct AppConfig: Codable, Equatable {
         enabledIconPresets: Set<FileIconPreset>,
         customIcons: [CustomFileIcon],
         enabledTools: Set<ToolActionID>,
+        toolOrder: [ToolActionID],
+        toolCustomTitles: [String: String],
         showIcons: Bool,
         showMenuBarIcon: Bool,
         includeExternalVolumes: Bool,
@@ -417,7 +472,9 @@ struct AppConfig: Codable, Equatable {
         mergeApplicationActions: Bool,
         hideCutItems: Bool,
         pendingCutPaths: [String],
-        pendingCutItemsHidden: Bool
+        pendingCutItemsHidden: Bool,
+        terminalOpenMode: TerminalOpenMode,
+        iTermOpenMode: TerminalOpenMode
     ) {
         self.schemaVersion = schemaVersion
         self.templates = templates
@@ -427,6 +484,8 @@ struct AppConfig: Codable, Equatable {
         self.enabledIconPresets = enabledIconPresets
         self.customIcons = customIcons
         self.enabledTools = enabledTools
+        self.toolOrder = toolOrder
+        self.toolCustomTitles = toolCustomTitles
         self.showIcons = showIcons
         self.showMenuBarIcon = showMenuBarIcon
         self.includeExternalVolumes = includeExternalVolumes
@@ -442,6 +501,8 @@ struct AppConfig: Codable, Equatable {
         self.hideCutItems = hideCutItems
         self.pendingCutPaths = pendingCutPaths
         self.pendingCutItemsHidden = pendingCutItemsHidden
+        self.terminalOpenMode = terminalOpenMode
+        self.iTermOpenMode = iTermOpenMode
     }
 
     init(from decoder: Decoder) throws {
@@ -454,6 +515,8 @@ struct AppConfig: Codable, Equatable {
         enabledIconPresets = try values.decodeIfPresent(Set<FileIconPreset>.self, forKey: .enabledIconPresets) ?? Set(FileIconPreset.allCases)
         customIcons = try values.decodeIfPresent([CustomFileIcon].self, forKey: .customIcons) ?? []
         enabledTools = try values.decodeIfPresent(Set<ToolActionID>.self, forKey: .enabledTools) ?? Set(ToolActionID.settingsCases)
+        toolOrder = (try? values.decode([ToolActionID].self, forKey: .toolOrder)) ?? ToolActionID.settingsCases
+        toolCustomTitles = try values.decodeIfPresent([String: String].self, forKey: .toolCustomTitles) ?? [:]
         showIcons = try values.decodeIfPresent(Bool.self, forKey: .showIcons) ?? true
         showMenuBarIcon = try values.decodeIfPresent(Bool.self, forKey: .showMenuBarIcon) ?? true
         includeExternalVolumes = try values.decodeIfPresent(Bool.self, forKey: .includeExternalVolumes) ?? false
@@ -469,6 +532,21 @@ struct AppConfig: Codable, Equatable {
         hideCutItems = try values.decodeIfPresent(Bool.self, forKey: .hideCutItems) ?? false
         pendingCutPaths = try values.decodeIfPresent([String].self, forKey: .pendingCutPaths) ?? []
         pendingCutItemsHidden = try values.decodeIfPresent(Bool.self, forKey: .pendingCutItemsHidden) ?? false
+        terminalOpenMode = try values.decodeIfPresent(TerminalOpenMode.self, forKey: .terminalOpenMode) ?? .window
+        iTermOpenMode = try values.decodeIfPresent(TerminalOpenMode.self, forKey: .iTermOpenMode) ?? .window
+    }
+
+    func title(for tool: ToolActionID) -> String {
+        let custom = toolCustomTitles[tool.rawValue]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return custom.isEmpty ? tool.title : custom
+    }
+
+    func orderedTools(from tools: [ToolActionID]) -> [ToolActionID] {
+        let available = Set(tools)
+        var seen = Set<ToolActionID>()
+        return (toolOrder + tools).filter {
+            available.contains($0) && seen.insert($0).inserted
+        }
     }
 }
 
@@ -638,6 +716,41 @@ final class ConfigStore {
             decoded.pendingCutPaths = []
             decoded.pendingCutItemsHidden = false
             decoded.schemaVersion = 13
+        }
+        if schemaVersion < 14 {
+            for application in AppConfig.defaultApplications
+                where !decoded.applications.contains(where: { $0.id == application.id }) {
+                decoded.applications.append(application)
+            }
+            decoded.schemaVersion = 14
+        }
+        if schemaVersion < 15 {
+            decoded.terminalOpenMode = .window
+            decoded.iTermOpenMode = .window
+            decoded.schemaVersion = 15
+        }
+        if schemaVersion < 16 {
+            decoded.enabledTools.insert(.generateQRCode)
+            decoded.schemaVersion = 16
+        }
+        if schemaVersion < 17 {
+            decoded.toolOrder = ToolActionID.settingsCases
+            decoded.toolCustomTitles = [:]
+            decoded.schemaVersion = 17
+        }
+        if schemaVersion < 18 {
+            decoded.enabledTools.insert(.compress7Z)
+            decoded.schemaVersion = 18
+        }
+        let supportedTools = Set(ToolActionID.settingsCases)
+        var seenTools = Set<ToolActionID>()
+        decoded.toolOrder = decoded.toolOrder.filter {
+            supportedTools.contains($0) && seenTools.insert($0).inserted
+        }
+        decoded.toolOrder.append(contentsOf: ToolActionID.settingsCases.filter { seenTools.insert($0).inserted })
+        decoded.toolCustomTitles = decoded.toolCustomTitles.filter { key, value in
+            ToolActionID(rawValue: key).map(supportedTools.contains) == true
+                && !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
         return decoded
     }

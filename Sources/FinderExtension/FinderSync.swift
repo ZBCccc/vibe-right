@@ -65,7 +65,7 @@ final class FinderSync: FIFinderSync {
         let hasSelection = !(controller.selectedItemURLs()?.isEmpty ?? true)
 
         if menuKind == .contextualMenuForContainer || menuKind == .toolbarItemMenu || !hasSelection {
-            menu.addItem(newFileMenu())
+            addNewFileItems(to: menu)
             if store.config.favoritesEnabled, store.config.favorites.contains(where: \.enabled) {
                 menu.addItem(commonDirectoryMenu())
             }
@@ -73,7 +73,7 @@ final class FinderSync: FIFinderSync {
             menu.addItem(.separator())
             addDirectoryTools(to: menu)
         } else {
-            menu.addItem(newFileMenu())
+            addNewFileItems(to: menu)
             if store.config.moveEnabled {
                 menu.addItem(transferMenu(title: "移动文件到…", action: "move"))
             }
@@ -92,11 +92,27 @@ final class FinderSync: FIFinderSync {
         return menu
     }
 
-    private func newFileMenu() -> NSMenuItem {
+    private func addNewFileItems(to menu: NSMenu) {
+        let templates = store.config.templates.filter(\.enabled)
+        for template in templates where template.showInMainMenu {
+            let title = template.name.hasPrefix("新建") ? template.name : "新建 \(template.name)"
+            menu.addItem(actionItem(
+                title: title,
+                symbol: template.isDirectory ? "folder.badge.plus" : "doc.badge.plus",
+                payload: "new|\(template.id)"
+            ))
+        }
+
+        let submenuTemplates = templates.filter { !$0.showInMainMenu }
+        guard !submenuTemplates.isEmpty else { return }
+        menu.addItem(newFileMenu(templates: submenuTemplates))
+    }
+
+    private func newFileMenu(templates: [FileTemplate]) -> NSMenuItem {
         let root = NSMenuItem(title: "新建文件", action: nil, keyEquivalent: "")
         root.image = image("doc.badge.plus")
         let submenu = NSMenu(title: "新建文件")
-        for template in store.config.templates where template.enabled {
+        for template in templates {
             submenu.addItem(actionItem(
                 title: template.name,
                 symbol: template.isDirectory ? "folder.badge.plus" : "doc",
@@ -199,8 +215,10 @@ final class FinderSync: FIFinderSync {
         ])
         if allRegularFiles { tools.append(.toggleFileExtension) }
         tools.append(.repairFilename)
+        tools.append(.generateQRCode)
+        tools.append(.compress7Z)
         tools.append(.compressZIP)
-        if urls.allSatisfy({ $0.pathExtension.lowercased() == "zip" }) {
+        if urls.allSatisfy({ ["zip", "7z"].contains($0.pathExtension.lowercased()) }) {
             tools.append(.extractArchive)
         }
         addTools(
@@ -238,7 +256,7 @@ final class FinderSync: FIFinderSync {
         title: String,
         symbol: String
     ) {
-        let enabled = tools.filter { store.config.enabledTools.contains($0) }
+        let enabled = store.config.orderedTools(from: tools).filter { store.config.enabledTools.contains($0) }
         guard !enabled.isEmpty else { return }
         guard merged else {
             for tool in enabled { addTool(tool, to: menu) }
@@ -309,9 +327,10 @@ final class FinderSync: FIFinderSync {
             menu.addItem(toolItem(tool))
             return
         }
-        let item = NSMenuItem(title: tool.title, action: nil, keyEquivalent: "")
+        let title = store.config.title(for: tool)
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.image = image(tool.symbolName)
-        let submenu = NSMenu(title: tool.title)
+        let submenu = NSMenu(title: title)
         submenu.addItem(actionItem(title: "MD5", symbol: "number", payload: "checksum|md5"))
         submenu.addItem(actionItem(title: "SHA-1", symbol: "number", payload: "checksum|sha1"))
         submenu.addItem(actionItem(title: "SHA-256", symbol: "number", payload: "checksum|sha256"))
@@ -321,7 +340,7 @@ final class FinderSync: FIFinderSync {
     }
 
     private func toolItem(_ tool: ToolActionID) -> NSMenuItem {
-        actionItem(title: tool.title, symbol: tool.symbolName, payload: "tool|\(tool.rawValue)")
+        actionItem(title: store.config.title(for: tool), symbol: tool.symbolName, payload: "tool|\(tool.rawValue)")
     }
 
     private func actionItem(title: String, symbol: String, payload: String) -> NSMenuItem {
@@ -386,11 +405,18 @@ final class FinderSync: FIFinderSync {
             return try executeTool(tool)
         case "application":
             guard let application = store.config.applications.first(where: { $0.id == argument }) else { return false }
-            try open(
-                urls: directoryURLs(from: selectedURLs()),
-                appName: application.name,
-                bundleIdentifiers: application.bundleIdentifiers
-            )
+            let directories = directoryURLs(from: selectedURLs())
+            if application.id == "terminal" {
+                try requestTerminalOpen(.terminal, mode: store.config.terminalOpenMode, directories: directories)
+            } else if application.id == "iterm2" {
+                try requestTerminalOpen(.iTerm2, mode: store.config.iTermOpenMode, directories: directories)
+            } else {
+                try open(
+                    urls: directories,
+                    appName: application.name,
+                    bundleIdentifiers: application.bundleIdentifiers
+                )
+            }
             return true
         case "pasteCut":
             return try pastePendingCutItems()
@@ -477,6 +503,12 @@ final class FinderSync: FIFinderSync {
             alert.addButton(withTitle: "取消")
             guard alert.runModal() == .alertFirstButtonReturn else { return false }
             try FileOperations.applyFilenameRepairs(repairs)
+        case .generateQRCode:
+            guard let first = urls.first else { throw FileOperationError.emptySelection }
+            _ = try FileOperations.createQRCode(
+                from: urls.map(\.path).joined(separator: "\n"),
+                in: first.deletingLastPathComponent()
+            )
         case .permanentDelete:
             if store.config.confirmPermanentDelete {
                 let alert = NSAlert()
@@ -488,18 +520,20 @@ final class FinderSync: FIFinderSync {
                 guard alert.runModal() == .alertFirstButtonReturn else { return false }
             }
             try FileOperations.deletePermanently(urls)
+        case .compress7Z:
+            try FileOperations.create7Z(from: urls)
         case .compressZIP:
             try FileOperations.createZIP(from: urls)
         case .extractArchive:
-            try FileOperations.extractZIP(urls)
+            try FileOperations.extractArchives(urls)
         case .toggleHidden:
             try FileOperations.toggleHidden(urls)
         case .openTerminal:
-            try open(urls: directoryURLs(from: urls), appName: "Terminal", bundleIdentifiers: ["com.apple.Terminal"])
+            try requestTerminalOpen(.terminal, mode: store.config.terminalOpenMode, directories: directoryURLs(from: urls))
         case .openWarp:
             try open(urls: directoryURLs(from: urls), appName: "Warp", bundleIdentifiers: ["dev.warp.Warp-Stable"])
         case .openITerm2:
-            try open(urls: directoryURLs(from: urls), appName: "iTerm2", bundleIdentifiers: ["com.googlecode.iterm2"])
+            try requestTerminalOpen(.iTerm2, mode: store.config.iTermOpenMode, directories: directoryURLs(from: urls))
         case .openVSCode:
             try open(urls: directoryURLs(from: urls), appName: "Visual Studio Code", bundleIdentifiers: ["com.microsoft.VSCode"])
         case .openCursor:
@@ -682,6 +716,20 @@ final class FinderSync: FIFinderSync {
             throw FileOperationError.applicationNotFound(appName)
         }
         workspace.open(urls, withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
+    }
+
+    private func requestTerminalOpen(
+        _ application: TerminalApplication,
+        mode: TerminalOpenMode,
+        directories: [URL]
+    ) throws {
+        guard NSWorkspace.shared.urlForApplication(withBundleIdentifier: application.bundleIdentifier) != nil else {
+            throw FileOperationError.applicationNotFound(application.displayName)
+        }
+        let request = TerminalLaunchRequest(application: application, mode: mode, directories: directories)
+        guard let url = TerminalAutomation.requestURL(for: request), NSWorkspace.shared.open(url) else {
+            throw FileOperationError.processFailed("无法请求 \(application.displayName) 打开目录")
+        }
     }
 
     private func openSettings() {
