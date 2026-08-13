@@ -100,7 +100,10 @@ final class FinderSync: FIFinderSync {
     }
 
     private func addDirectoryTools(to menu: NSMenu) {
-        for tool in [ToolActionID.copyPath, .openTerminal, .openVSCode, .openGoLand] where store.config.enabledTools.contains(tool) {
+        let directoryTools: [ToolActionID] = [
+            .copyPath, .openTerminal, .openWarp, .openITerm2, .openVSCode, .openCursor, .openGoLand
+        ]
+        for tool in directoryTools where store.config.enabledTools.contains(tool) {
             menu.addItem(toolItem(tool))
         }
     }
@@ -197,8 +200,14 @@ final class FinderSync: FIFinderSync {
             try FileOperations.toggleHidden(urls)
         case .openTerminal:
             try open(urls: directoryURLs(from: urls), appName: "Terminal", bundleIdentifiers: ["com.apple.Terminal"])
+        case .openWarp:
+            try open(urls: directoryURLs(from: urls), appName: "Warp", bundleIdentifiers: ["dev.warp.Warp-Stable"])
+        case .openITerm2:
+            try open(urls: directoryURLs(from: urls), appName: "iTerm2", bundleIdentifiers: ["com.googlecode.iterm2"])
         case .openVSCode:
             try open(urls: directoryURLs(from: urls), appName: "Visual Studio Code", bundleIdentifiers: ["com.microsoft.VSCode"])
+        case .openCursor:
+            try open(urls: directoryURLs(from: urls), appName: "Cursor", bundleIdentifiers: ["com.todesktop.230313mzl4w4u92"])
         case .openGoLand:
             try open(urls: directoryURLs(from: urls), appName: "GoLand", bundleIdentifiers: ["com.jetbrains.goland"])
         case .convertPNG:

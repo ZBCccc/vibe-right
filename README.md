@@ -10,7 +10,7 @@
 - 将选中文件复制/移动到下载、文稿、图片等常用目录
 - 复制名称、复制路径、计算 MD5/SHA-256
 - 隐藏或取消隐藏文件
-- 在终端、Visual Studio Code、GoLand 中打开目录
+- 在系统终端、Warp、iTerm2、Visual Studio Code、Cursor、GoLand 中打开目录
 - 将图片转换为 PNG 或 JPEG
 - 配置中心实时启停模板、目标目录和工具项
 - 菜单栏入口、Finder 工具栏入口、扩展状态与系统管理入口

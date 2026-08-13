@@ -34,7 +34,10 @@ enum ToolActionID: String, Codable, CaseIterable {
     case createFolderFromName
     case toggleHidden
     case openTerminal
+    case openWarp
+    case openITerm2
     case openVSCode
+    case openCursor
     case openGoLand
     case convertPNG
     case convertJPEG
@@ -47,7 +50,10 @@ enum ToolActionID: String, Codable, CaseIterable {
         case .createFolderFromName: return "使用文件名新建文件夹"
         case .toggleHidden: return "隐藏/取消隐藏"
         case .openTerminal: return "进入终端"
+        case .openWarp: return "进入 Warp"
+        case .openITerm2: return "进入 iTerm2"
         case .openVSCode: return "进入 Visual Studio Code"
+        case .openCursor: return "使用 Cursor 打开"
         case .openGoLand: return "进入 GoLand"
         case .convertPNG: return "图片转换为 PNG"
         case .convertJPEG: return "图片转换为 JPEG"
@@ -62,7 +68,10 @@ enum ToolActionID: String, Codable, CaseIterable {
         case .createFolderFromName: return "folder.badge.plus"
         case .toggleHidden: return "eye.slash"
         case .openTerminal: return "terminal"
+        case .openWarp: return "terminal.fill"
+        case .openITerm2: return "terminal.fill"
         case .openVSCode: return "chevron.left.forwardslash.chevron.right"
+        case .openCursor: return "cursorarrow.rays"
         case .openGoLand: return "hammer"
         case .convertPNG, .convertJPEG: return "photo.badge.arrow.down"
         }
@@ -70,6 +79,7 @@ enum ToolActionID: String, Codable, CaseIterable {
 }
 
 struct AppConfig: Codable, Equatable {
+    var schemaVersion: Int?
     var templates: [FileTemplate]
     var destinations: [Destination]
     var enabledTools: Set<ToolActionID>
@@ -78,6 +88,7 @@ struct AppConfig: Codable, Equatable {
     var playSound: Bool
 
     static let defaults = AppConfig(
+        schemaVersion: 3,
         templates: [
             FileTemplate(id: "folder", name: "文件夹", fileExtension: "", enabled: true, isDirectory: true),
             FileTemplate(id: "txt", name: "TXT", fileExtension: "txt", enabled: true, isDirectory: false),
@@ -152,8 +163,17 @@ final class ConfigStore {
 
     private static func load(from url: URL) -> AppConfig {
         guard let data = try? Data(contentsOf: url),
-              let decoded = try? JSONDecoder().decode(AppConfig.self, from: data) else {
+              var decoded = try? JSONDecoder().decode(AppConfig.self, from: data) else {
             return .defaults
+        }
+        let schemaVersion = decoded.schemaVersion ?? 1
+        if schemaVersion < 2 {
+            decoded.enabledTools.insert(.openCursor)
+        }
+        if schemaVersion < 3 {
+            decoded.enabledTools.insert(.openWarp)
+            decoded.enabledTools.insert(.openITerm2)
+            decoded.schemaVersion = 3
         }
         return decoded
     }

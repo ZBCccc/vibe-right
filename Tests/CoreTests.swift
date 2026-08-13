@@ -28,6 +28,46 @@ struct CoreTests {
         let reloaded = ConfigStore(configURL: configURL)
         precondition(reloaded.config.playSound == false)
 
+        let legacyConfigURL = root.appendingPathComponent("legacy-config.json")
+        let legacyConfig = """
+        {
+          "templates": [],
+          "destinations": [],
+          "enabledTools": ["copyPath"],
+          "showIcons": true,
+          "autoOpenNewFile": false,
+          "playSound": true
+        }
+        """
+        try Data(legacyConfig.utf8).write(to: legacyConfigURL)
+        let migrated = ConfigStore(configURL: legacyConfigURL)
+        precondition(migrated.config.schemaVersion == 3)
+        precondition(migrated.config.enabledTools == [.copyPath, .openCursor, .openWarp, .openITerm2])
+        try migrated.update { $0.enabledTools.remove(.openCursor) }
+        try migrated.update { $0.enabledTools.remove(.openWarp) }
+        try migrated.update { $0.enabledTools.remove(.openITerm2) }
+        let migratedReloaded = ConfigStore(configURL: legacyConfigURL)
+        precondition(!migratedReloaded.config.enabledTools.contains(.openCursor))
+        precondition(!migratedReloaded.config.enabledTools.contains(.openWarp))
+        precondition(!migratedReloaded.config.enabledTools.contains(.openITerm2))
+
+        let version2ConfigURL = root.appendingPathComponent("version-2-config.json")
+        let version2Config = """
+        {
+          "schemaVersion": 2,
+          "templates": [],
+          "destinations": [],
+          "enabledTools": ["copyPath"],
+          "showIcons": true,
+          "autoOpenNewFile": false,
+          "playSound": true
+        }
+        """
+        try Data(version2Config.utf8).write(to: version2ConfigURL)
+        let version2Migrated = ConfigStore(configURL: version2ConfigURL)
+        precondition(version2Migrated.config.schemaVersion == 3)
+        precondition(version2Migrated.config.enabledTools == [.copyPath, .openWarp, .openITerm2])
+
         let digest = try FileOperations.checksum(of: first, algorithm: "sha256")
         precondition(digest.count == 64)
         print("CoreTests passed")
