@@ -102,7 +102,6 @@ final class FinderSync: FIFinderSync {
                 menu.addItem(commonDirectoryMenu())
             }
             addPendingCutActions(to: menu)
-            menu.addItem(.separator())
             addDirectoryTools(to: menu)
         } else {
             addNewFileItems(to: menu)
@@ -119,7 +118,6 @@ final class FinderSync: FIFinderSync {
             addSelectionTools(to: menu)
         }
 
-        menu.addItem(.separator())
         menu.addItem(actionItem(title: "打开灵犀右键设置", symbol: "gearshape", payload: "settings"))
         return menu
     }
