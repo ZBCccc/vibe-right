@@ -569,6 +569,16 @@ struct CoreTests {
         let finderActionURL = finderActionRequest.url
         precondition(finderActionURL != nil)
         precondition(FinderActionRequest(url: finderActionURL!) == finderActionRequest)
+        for action in FinderHostAction.allCases {
+            let request = FinderActionRequest(
+                action: action,
+                selectedURLs: [automationDirectory.appendingPathComponent("selected & quoted.txt")],
+                targetedURL: automationDirectory,
+                argument: action == .archive ? ToolActionID.customCompression.rawValue : nil
+            )
+            guard let url = request.url else { preconditionFailure("Finder action URL should be generated") }
+            precondition(FinderActionRequest(url: url) == request)
+        }
         precondition(FinderActionRequest(url: URL(string: "viberight://finder-action?action=unknown&target=/tmp")!) == nil)
         precondition(FinderActionRequest(url: URL(string: "viberight://finder-action?action=create-custom-file")!) == nil)
 
@@ -634,6 +644,69 @@ struct CoreTests {
         let sevenZipB = try Data(contentsOf: sevenZipExtracted[0].appendingPathComponent("b.txt"))
         precondition(String(data: sevenZipA, encoding: .utf8) == "A")
         precondition(String(data: sevenZipB, encoding: .utf8) == "B")
+
+        let separateSourceDirectory = root.appendingPathComponent("separate-archives", isDirectory: true)
+        try FileManager.default.createDirectory(at: separateSourceDirectory, withIntermediateDirectories: true)
+        let separateA = separateSourceDirectory.appendingPathComponent("alpha.txt")
+        let separateB = separateSourceDirectory.appendingPathComponent("beta.txt")
+        try Data("alpha".utf8).write(to: separateA)
+        try Data("beta".utf8).write(to: separateB)
+        let separateArchives = try FileOperations.createArchives(
+            from: [separateA, separateB],
+            options: ArchiveCompressionOptions(format: .zip, separateArchives: true)
+        )
+        precondition(separateArchives.map(\.lastPathComponent) == ["alpha.txt.zip", "beta.txt.zip"])
+        precondition(separateArchives.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+
+        let passwordSource = separateSourceDirectory.appendingPathComponent("confidential.txt")
+        try Data("classified".utf8).write(to: passwordSource)
+        let encryptedArchives = try FileOperations.createArchives(
+            from: [passwordSource],
+            options: ArchiveCompressionOptions(format: .sevenZip, password: "pass phrase")
+        )
+        precondition(encryptedArchives.count == 1)
+        do {
+            _ = try FileOperations.extractArchives(encryptedArchives)
+            preconditionFailure("Encrypted archive should require a password")
+        } catch FileOperationError.archivePasswordRequired {
+            // Expected.
+        }
+        do {
+            _ = try FileOperations.extractArchives(
+                encryptedArchives,
+                options: ArchiveExtractionOptions(password: "wrong password")
+            )
+            preconditionFailure("Incorrect archive password should fail")
+        } catch FileOperationError.invalidArchivePassword {
+            // Expected.
+        }
+        let encryptedExtracted = try FileOperations.extractArchives(
+            encryptedArchives,
+            options: ArchiveExtractionOptions(password: "pass phrase")
+        )
+        let encryptedContents = try Data(
+            contentsOf: encryptedExtracted[0].appendingPathComponent("confidential.txt")
+        )
+        precondition(String(data: encryptedContents, encoding: .utf8) == "classified")
+
+        let deleteSourceDirectory = root.appendingPathComponent("archive-delete-source", isDirectory: true)
+        try FileManager.default.createDirectory(at: deleteSourceDirectory, withIntermediateDirectories: true)
+        let deleteSource = deleteSourceDirectory.appendingPathComponent("remove-after-archive.txt")
+        try Data("delete after verification".utf8).write(to: deleteSource)
+        let deleteArchive = try FileOperations.createArchives(
+            from: [deleteSource],
+            options: ArchiveCompressionOptions(format: .zip, deleteOriginals: true)
+        )
+        precondition(!FileManager.default.fileExists(atPath: deleteSource.path))
+        precondition(FileManager.default.fileExists(atPath: deleteArchive[0].path))
+        let currentFolderResults = try FileOperations.extractArchives(
+            deleteArchive,
+            options: ArchiveExtractionOptions(destination: .currentFolder, deleteArchives: true)
+        )
+        precondition(!FileManager.default.fileExists(atPath: deleteArchive[0].path))
+        precondition(currentFolderResults.contains(where: { $0.lastPathComponent == "remove-after-archive.txt" }))
+        let currentFolderContents = try Data(contentsOf: currentFolderResults[0])
+        precondition(currentFolderContents == Data("delete after verification".utf8))
 
         let disposable = root.appendingPathComponent("delete-me.txt")
         try Data("delete".utf8).write(to: disposable)

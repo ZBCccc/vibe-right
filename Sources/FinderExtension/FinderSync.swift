@@ -252,10 +252,28 @@ final class FinderSync: FIFinderSync {
         if allRegularFiles { tools.append(.toggleFileExtension) }
         tools.append(.repairFilename)
         tools.append(.generateQRCode)
-        tools.append(.compress7Z)
-        tools.append(.compressZIP)
+        tools.append(contentsOf: [
+            .compress7Z,
+            .compressZIP,
+            .compress7ZSeparate,
+            .compressZIPSeparate,
+            .encryptCompress7Z,
+            .encryptCompressZIP,
+            .encryptCompress7ZSeparate,
+            .encryptCompressZIPSeparate,
+            .compress7ZDeleteOriginals,
+            .compressZIPDeleteOriginals,
+            .compress7ZSeparateDeleteOriginals,
+            .compressZIPSeparateDeleteOriginals,
+            .customCompression
+        ])
         if urls.allSatisfy({ ["zip", "7z"].contains($0.pathExtension.lowercased()) }) {
-            tools.append(.extractArchive)
+            tools.append(contentsOf: [
+                .extractArchive,
+                .extractArchiveSeparate,
+                .extractArchiveDeleteOriginal,
+                .extractArchiveSeparateDeleteOriginal
+            ])
         }
         addTools(
             tools,
@@ -432,7 +450,11 @@ final class FinderSync: FIFinderSync {
             else { try FileOperations.move(urls, to: destination.expandedURL) }
             return true
         case "copyCustom", "moveCustom":
-            return try chooseDestinationAndTransfer(action: action == "copyCustom" ? "copy" : "move")
+            try requestHostAction(
+                action == "copyCustom" ? .copyToCustomDestination : .moveToCustomDestination,
+                targetedURL: targetedURL()
+            )
+            return false
         case "open":
             guard let destination = store.config.favorites.first(where: { $0.id == argument }) else { return false }
             NSWorkspace.shared.open(destination.expandedURL)
@@ -528,22 +550,8 @@ final class FinderSync: FIFinderSync {
         case .toggleFileExtension:
             try FileOperations.toggleHiddenExtension(for: urls)
         case .repairFilename:
-            let repairs = try FileOperations.proposedFilenameRepairs(for: urls)
-            guard !repairs.isEmpty else {
-                throw FileOperationError.processFailed(L10n.text("未发现可高置信度修复的乱码文件名"))
-            }
-            let preview = repairs.prefix(8).map {
-                "\($0.source.lastPathComponent)  →  \($0.target.lastPathComponent)"
-            }.joined(separator: "\n")
-            let remaining = repairs.count > 8 ? "\n" + L10n.format("…以及另外 %d 项", repairs.count - 8) : ""
-            let alert = NSAlert()
-            alert.messageText = L10n.text("确认修复乱码文件名？")
-            alert.informativeText = preview + remaining
-            alert.alertStyle = .informational
-            alert.addButton(withTitle: L10n.text("修复"))
-            alert.addButton(withTitle: L10n.text("取消"))
-            guard alert.runModal() == .alertFirstButtonReturn else { return false }
-            try FileOperations.applyFilenameRepairs(repairs)
+            try requestHostAction(.repairFilename, targetedURL: targetedURL())
+            return false
         case .generateQRCode:
             guard let first = urls.first else { throw FileOperationError.emptySelection }
             _ = try FileOperations.createQRCode(
@@ -552,21 +560,21 @@ final class FinderSync: FIFinderSync {
             )
         case .permanentDelete:
             if store.config.confirmPermanentDelete {
-                let alert = NSAlert()
-                alert.messageText = L10n.text("彻底删除所选项目？")
-                alert.informativeText = L10n.text("此操作不会移入废纸篓，删除后无法恢复。")
-                alert.alertStyle = .critical
-                alert.addButton(withTitle: L10n.text("彻底删除"))
-                alert.addButton(withTitle: L10n.text("取消"))
-                guard alert.runModal() == .alertFirstButtonReturn else { return false }
+                try requestHostAction(.confirmPermanentDelete, targetedURL: targetedURL())
+                return false
             }
             try FileOperations.deletePermanently(urls)
-        case .compress7Z:
-            try FileOperations.create7Z(from: urls)
-        case .compressZIP:
-            try FileOperations.createZIP(from: urls)
-        case .extractArchive:
-            try FileOperations.extractArchives(urls)
+        case .compress7Z, .compressZIP,
+             .compress7ZSeparate, .compressZIPSeparate,
+             .encryptCompress7Z, .encryptCompressZIP,
+             .encryptCompress7ZSeparate, .encryptCompressZIPSeparate,
+             .compress7ZDeleteOriginals, .compressZIPDeleteOriginals,
+             .compress7ZSeparateDeleteOriginals, .compressZIPSeparateDeleteOriginals,
+             .customCompression,
+             .extractArchive, .extractArchiveSeparate,
+             .extractArchiveDeleteOriginal, .extractArchiveSeparateDeleteOriginal:
+            try requestHostAction(.archive, targetedURL: targetedURL(), argument: tool.rawValue)
+            return false
         case .toggleHidden:
             try FileOperations.toggleHidden(urls)
         case .openTerminal:
@@ -658,20 +666,6 @@ final class FinderSync: FIFinderSync {
         store.config.pendingCutPaths
             .map { URL(fileURLWithPath: $0) }
             .filter { FileManager.default.fileExists(atPath: $0.path) }
-    }
-
-    private func chooseDestinationAndTransfer(action: String) throws -> Bool {
-        let panel = NSOpenPanel()
-        panel.title = L10n.text(action == "copy" ? "选择复制目标目录" : "选择移动目标目录")
-        panel.prompt = L10n.text(action == "copy" ? "复制到这里" : "移动到这里")
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let destination = panel.url else { return false }
-        let urls = selectedURLs()
-        if action == "copy" { try FileOperations.copy(urls, to: destination) }
-        else { try FileOperations.move(urls, to: destination) }
-        return true
     }
 
     private func addToFavorites(_ directory: URL) throws {
@@ -773,11 +767,16 @@ final class FinderSync: FIFinderSync {
         }
     }
 
-    private func requestHostAction(_ action: FinderHostAction, targetedURL: URL?) throws {
+    private func requestHostAction(
+        _ action: FinderHostAction,
+        targetedURL: URL?,
+        argument: String? = nil
+    ) throws {
         let request = FinderActionRequest(
             action: action,
             selectedURLs: selectedURLs(),
-            targetedURL: targetedURL
+            targetedURL: targetedURL,
+            argument: argument
         )
         guard let url = request.url, NSWorkspace.shared.open(url) else {
             throw FileOperationError.applicationNotFound(L10n.text("灵犀右键"))

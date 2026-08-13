@@ -72,3 +72,5 @@ Finder Sync、Core Graphics 事件监听和 AppKit 菜单均使用 Apple 公共 
 ## 许可证
 
 本项目采用 [MIT License](LICENSE)。
+
+应用同时随附独立许可的 7-Zip 命令行程序，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

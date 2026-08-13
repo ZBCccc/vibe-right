@@ -1,7 +1,12 @@
 import Foundation
 
-enum FinderHostAction: String, Equatable {
+enum FinderHostAction: String, Equatable, CaseIterable {
     case createCustomFile = "create-custom-file"
+    case copyToCustomDestination = "copy-to-custom-destination"
+    case moveToCustomDestination = "move-to-custom-destination"
+    case repairFilename = "repair-filename"
+    case confirmPermanentDelete = "confirm-permanent-delete"
+    case archive
 }
 
 struct FinderActionRequest: Equatable {
@@ -11,11 +16,18 @@ struct FinderActionRequest: Equatable {
     var action: FinderHostAction
     var selectedURLs: [URL]
     var targetedURL: URL?
+    var argument: String?
 
-    init(action: FinderHostAction, selectedURLs: [URL], targetedURL: URL?) {
+    init(
+        action: FinderHostAction,
+        selectedURLs: [URL],
+        targetedURL: URL?,
+        argument: String? = nil
+    ) {
         self.action = action
         self.selectedURLs = selectedURLs.map(\.standardizedFileURL)
         self.targetedURL = targetedURL?.standardizedFileURL
+        self.argument = argument
     }
 
     init?(url: URL) {
@@ -39,7 +51,12 @@ struct FinderActionRequest: Equatable {
             .flatMap { $0.hasPrefix("/") ? URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL : nil }
         guard targetedURL != nil || !selectedURLs.isEmpty else { return nil }
 
-        self.init(action: action, selectedURLs: selectedURLs, targetedURL: targetedURL)
+        self.init(
+            action: action,
+            selectedURLs: selectedURLs,
+            targetedURL: targetedURL,
+            argument: items.first(where: { $0.name == "argument" })?.value
+        )
     }
 
     var url: URL? {
@@ -49,6 +66,9 @@ struct FinderActionRequest: Equatable {
         components.queryItems = [URLQueryItem(name: "action", value: action.rawValue)]
         if let targetedURL {
             components.queryItems?.append(URLQueryItem(name: "target", value: targetedURL.path))
+        }
+        if let argument {
+            components.queryItems?.append(URLQueryItem(name: "argument", value: argument))
         }
         components.queryItems?.append(contentsOf: selectedURLs.map {
             URLQueryItem(name: "selected", value: $0.path)

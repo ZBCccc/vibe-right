@@ -20,4 +20,4 @@ swiftc \
   "$ROOT_DIR/Tests/CoreTests.swift" \
   -o "$BUILD_DIR/CoreTests"
 
-"$BUILD_DIR/CoreTests"
+VIBERIGHT_ARCHIVE_TOOL="$ROOT_DIR/Resources/Tools/7zz" "$BUILD_DIR/CoreTests"

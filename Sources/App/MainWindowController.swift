@@ -1256,9 +1256,25 @@ final class MainViewController: NSViewController {
         case .repairFilename: return "高置信度识别乱码，预览确认后再重命名"
         case .generateQRCode: return "把所选项目的绝对路径生成离线 PNG 二维码"
         case .permanentDelete: return "绕过废纸篓删除，默认必须二次确认"
-        case .compress7Z: return "使用系统归档引擎在当前目录生成 7z 压缩包"
-        case .compressZIP: return "使用系统 ZIP 工具在当前目录生成压缩包"
-        case .extractArchive: return "将 ZIP 或 7z 解压到同名目录"
+        case .compress7Z, .compressZIP:
+            return "使用内置 7-Zip 归档引擎创建压缩包"
+        case .compress7ZSeparate, .compressZIPSeparate:
+            return "为每个所选项目分别创建压缩包"
+        case .encryptCompress7Z, .encryptCompressZIP:
+            return "使用 AES-256 加密压缩包"
+        case .encryptCompress7ZSeparate, .encryptCompressZIPSeparate:
+            return "分别创建 AES-256 加密压缩包"
+        case .compress7ZDeleteOriginals, .compressZIPDeleteOriginals,
+             .compress7ZSeparateDeleteOriginals, .compressZIPSeparateDeleteOriginals:
+            return "通过完整性校验后删除原文件"
+        case .customCompression:
+            return "选择格式、归档方式和可选加密密码。"
+        case .extractArchive:
+            return "安全解压到当前文件夹"
+        case .extractArchiveSeparate:
+            return "安全解压到同名独立文件夹"
+        case .extractArchiveDeleteOriginal, .extractArchiveSeparateDeleteOriginal:
+            return "安全解压后删除原压缩包"
         case .toggleHidden: return "切换 Finder 隐藏属性"
         case .openTerminal: return "在系统终端打开目录"
         case .openWarp: return "使用 Warp 打开目录"

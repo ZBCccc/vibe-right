@@ -1,7 +1,56 @@
 import AppKit
 import CoreImage
+import Darwin
 import Foundation
 import ImageIO
+
+enum ArchiveFormat: String, Codable, CaseIterable {
+    case sevenZip = "7z"
+    case zip
+
+    var pathExtension: String { rawValue }
+    var displayName: String { self == .sevenZip ? "7z" : "ZIP" }
+}
+
+struct ArchiveCompressionOptions: Equatable {
+    var format: ArchiveFormat
+    var separateArchives: Bool
+    var deleteOriginals: Bool
+    var password: String?
+
+    init(
+        format: ArchiveFormat,
+        separateArchives: Bool = false,
+        deleteOriginals: Bool = false,
+        password: String? = nil
+    ) {
+        self.format = format
+        self.separateArchives = separateArchives
+        self.deleteOriginals = deleteOriginals
+        self.password = password?.isEmpty == false ? password : nil
+    }
+}
+
+enum ArchiveExtractionDestination: String, Codable {
+    case currentFolder
+    case separateFolder
+}
+
+struct ArchiveExtractionOptions: Equatable {
+    var destination: ArchiveExtractionDestination
+    var deleteArchives: Bool
+    var password: String?
+
+    init(
+        destination: ArchiveExtractionDestination = .separateFolder,
+        deleteArchives: Bool = false,
+        password: String? = nil
+    ) {
+        self.destination = destination
+        self.deleteArchives = deleteArchives
+        self.password = password?.isEmpty == false ? password : nil
+    }
+}
 
 enum FileOperationError: LocalizedError {
     case noTargetDirectory
@@ -12,6 +61,8 @@ enum FileOperationError: LocalizedError {
     case applicationNotFound(String)
     case invalidCustomFileName
     case invalidCustomFileExtension
+    case archivePasswordRequired(URL)
+    case invalidArchivePassword(URL)
     case processFailed(String)
 
     var errorDescription: String? {
@@ -24,6 +75,8 @@ enum FileOperationError: LocalizedError {
         case .applicationNotFound(let name): return L10n.format("未安装 %@", name)
         case .invalidCustomFileName: return L10n.text("请输入有效的文件名")
         case .invalidCustomFileExtension: return L10n.text("请输入有效的文件后缀")
+        case .archivePasswordRequired(let url): return L10n.format("压缩包需要密码：%@", url.lastPathComponent)
+        case .invalidArchivePassword(let url): return L10n.format("压缩包密码错误：%@", url.lastPathComponent)
         case .processFailed(let message): return L10n.text(message)
         }
     }
@@ -489,88 +542,282 @@ enum FileOperations {
 
     @discardableResult
     static func createZIP(from urls: [URL]) throws -> URL {
-        let plan = try archivePlan(for: urls, pathExtension: "zip")
-        do {
-            _ = try runProcess(
-                executable: URL(fileURLWithPath: "/usr/bin/zip"),
-                arguments: ["-r", "-q", plan.output.path] + plan.relativePaths,
-                currentDirectory: plan.parent
-            )
-        } catch {
-            try? FileManager.default.removeItem(at: plan.output)
-            throw error
+        guard let output = try createArchives(
+            from: urls,
+            options: ArchiveCompressionOptions(format: .zip)
+        ).first else {
+            throw FileOperationError.emptySelection
         }
-        return plan.output
+        return output
     }
 
     @discardableResult
     static func create7Z(from urls: [URL]) throws -> URL {
-        let plan = try archivePlan(for: urls, pathExtension: "7z")
-        do {
-            _ = try runProcess(
-                executable: URL(fileURLWithPath: "/usr/bin/tar"),
-                arguments: ["-c", "--format", "7zip", "-f", plan.output.path] + plan.relativePaths,
-                currentDirectory: plan.parent
-            )
-        } catch {
-            try? FileManager.default.removeItem(at: plan.output)
-            throw error
+        guard let output = try createArchives(
+            from: urls,
+            options: ArchiveCompressionOptions(format: .sevenZip)
+        ).first else {
+            throw FileOperationError.emptySelection
         }
-        return plan.output
+        return output
     }
 
     @discardableResult
-    static func extractArchives(_ archives: [URL]) throws -> [URL] {
-        guard !archives.isEmpty else { throw FileOperationError.emptySelection }
-        var results: [URL] = []
-        for archive in archives {
-            guard ["zip", "7z"].contains(archive.pathExtension.lowercased()) else {
-                throw FileOperationError.processFailed(L10n.format("暂不支持解压：%@", archive.lastPathComponent))
-            }
-            let entries = try runProcess(
-                executable: URL(fileURLWithPath: "/usr/bin/tar"),
-                arguments: ["-tf", archive.path]
-            ).split(whereSeparator: \.isNewline).map(String.init)
-            try validateArchiveEntries(entries, archive: archive)
+    static func createArchives(
+        from urls: [URL],
+        options: ArchiveCompressionOptions
+    ) throws -> [URL] {
+        let sources = try normalizedExistingURLs(urls)
+        let engine = try archiveEngineURL()
+        let plans = try archivePlans(for: sources, options: options)
+        var outputs: [URL] = []
 
-            let destination = uniqueURL(
-                in: archive.deletingLastPathComponent(),
-                preferredName: archive.deletingPathExtension().lastPathComponent
-            )
-            try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
-            do {
-                _ = try runProcess(
-                    executable: URL(fileURLWithPath: "/usr/bin/tar"),
-                    arguments: [
-                        "-x", "--no-same-owner", "--no-same-permissions",
-                        "-f", archive.path,
-                        "-C", destination.path
-                    ]
+        do {
+            for plan in plans {
+                var arguments = [
+                    "a", "-bd", "-bso0", "-bsp0", "-y",
+                    "-t\(options.format.rawValue)"
+                ]
+                if options.password != nil {
+                    arguments.append("-p")
+                    if options.format == .sevenZip {
+                        arguments.append("-mhe=on")
+                    } else {
+                        arguments.append("-mem=AES256")
+                    }
+                }
+                arguments.append(plan.output.path)
+                arguments.append(contentsOf: plan.relativePaths)
+                outputs.append(plan.output)
+                _ = try runArchiveProcess(
+                    engine: engine,
+                    arguments: arguments,
+                    currentDirectory: plan.parent,
+                    password: options.password,
+                    archive: plan.output
                 )
-                results.append(destination)
-            } catch {
-                try? FileManager.default.removeItem(at: destination)
-                throw error
+                try testArchive(plan.output, engine: engine, password: options.password)
             }
+        } catch {
+            for output in outputs where FileManager.default.fileExists(atPath: output.path) {
+                try? FileManager.default.removeItem(at: output)
+            }
+            throw error
+        }
+
+        if options.deleteOriginals {
+            // Keep the verified archives if source cleanup fails, so no successful output is lost.
+            try deletePermanently(sources)
+        }
+        return outputs
+    }
+
+    @discardableResult
+    static func extractArchives(
+        _ archives: [URL],
+        options: ArchiveExtractionOptions = ArchiveExtractionOptions()
+    ) throws -> [URL] {
+        let normalizedArchives = try normalizedExistingURLs(archives)
+        let engine = try archiveEngineURL()
+        var allResults: [URL] = []
+        var createdResults: [URL] = []
+
+        do {
+            for archive in normalizedArchives {
+                guard ["zip", "7z"].contains(archive.pathExtension.lowercased()) else {
+                    throw FileOperationError.processFailed(
+                        L10n.format("暂不支持解压：%@", archive.lastPathComponent)
+                    )
+                }
+                try testArchive(archive, engine: engine, password: options.password)
+                let entries = try archiveEntries(archive, engine: engine, password: options.password)
+                try validateArchiveEntries(entries, archive: archive)
+
+                let parent = archive.deletingLastPathComponent().standardizedFileURL
+                let staging = parent.appendingPathComponent(
+                    ".VibeRight-Extracting-\(UUID().uuidString)",
+                    isDirectory: true
+                )
+                try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false)
+                defer { try? FileManager.default.removeItem(at: staging) }
+
+                var arguments = ["x", "-bd", "-bso0", "-bsp0", "-y"]
+                arguments.append("-o\(staging.path)")
+                arguments.append(archive.path)
+                _ = try runArchiveProcess(
+                    engine: engine,
+                    arguments: arguments,
+                    password: options.password,
+                    archive: archive
+                )
+                try validateExtractedTree(staging)
+
+                switch options.destination {
+                case .separateFolder:
+                    let destination = uniqueURL(
+                        in: parent,
+                        preferredName: archive.deletingPathExtension().lastPathComponent
+                    )
+                    try FileManager.default.moveItem(at: staging, to: destination)
+                    allResults.append(destination)
+                    createdResults.append(destination)
+                case .currentFolder:
+                    let moved = try moveExtractedContents(from: staging, to: parent)
+                    allResults.append(contentsOf: moved)
+                    createdResults.append(contentsOf: moved)
+                }
+            }
+        } catch {
+            for result in createdResults.reversed() where FileManager.default.fileExists(atPath: result.path) {
+                try? FileManager.default.removeItem(at: result)
+            }
+            throw error
+        }
+
+        if options.deleteArchives {
+            try deletePermanently(normalizedArchives)
+        }
+        return allResults
+    }
+
+    private struct ArchivePlan {
+        let parent: URL
+        let output: URL
+        let relativePaths: [String]
+    }
+
+    private static func archivePlans(
+        for urls: [URL],
+        options: ArchiveCompressionOptions
+    ) throws -> [ArchivePlan] {
+        guard let first = urls.first else { throw FileOperationError.emptySelection }
+        if options.separateArchives {
+            return urls.map { source in
+                let parent = source.deletingLastPathComponent().standardizedFileURL
+                return ArchivePlan(
+                    parent: parent,
+                    output: uniqueURL(
+                        in: parent,
+                        preferredName: source.lastPathComponent,
+                        pathExtension: options.format.pathExtension
+                    ),
+                    relativePaths: ["./" + source.lastPathComponent]
+                )
+            }
+        }
+
+        let parent = first.deletingLastPathComponent().standardizedFileURL
+        guard urls.allSatisfy({ $0.deletingLastPathComponent().standardizedFileURL == parent }) else {
+            throw FileOperationError.processFailed("只能将同一目录中的项目合并压缩")
+        }
+        let archiveName = urls.count == 1 ? first.lastPathComponent : L10n.text("归档")
+        return [ArchivePlan(
+            parent: parent,
+            output: uniqueURL(
+                in: parent,
+                preferredName: archiveName,
+                pathExtension: options.format.pathExtension
+            ),
+            relativePaths: urls.map { "./" + $0.lastPathComponent }
+        )]
+    }
+
+    private static func normalizedExistingURLs(_ urls: [URL]) throws -> [URL] {
+        guard !urls.isEmpty else { throw FileOperationError.emptySelection }
+        var seen = Set<String>()
+        var results: [URL] = []
+        for url in urls.map(\.standardizedFileURL) where seen.insert(url.path).inserted {
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw FileOperationError.processFailed(L10n.format("文件不存在：%@", url.lastPathComponent))
+            }
+            results.append(url)
         }
         return results
     }
 
-    private static func archivePlan(
-        for urls: [URL],
-        pathExtension: String
-    ) throws -> (parent: URL, output: URL, relativePaths: [String]) {
-        guard let first = urls.first else { throw FileOperationError.emptySelection }
-        let parent = first.deletingLastPathComponent().standardizedFileURL
-        guard urls.allSatisfy({ $0.deletingLastPathComponent().standardizedFileURL == parent }) else {
-            throw FileOperationError.processFailed("只能压缩同一目录中的项目")
+    private static func archiveEngineURL() throws -> URL {
+        var candidates: [URL] = []
+        if let override = ProcessInfo.processInfo.environment["VIBERIGHT_ARCHIVE_TOOL"], !override.isEmpty {
+            candidates.append(URL(fileURLWithPath: override))
         }
-        let archiveName = urls.count == 1 ? first.lastPathComponent : L10n.text("归档")
-        return (
-            parent,
-            uniqueURL(in: parent, preferredName: archiveName, pathExtension: pathExtension),
-            urls.map { "./" + $0.lastPathComponent }
+        if let bundled = Bundle.main.url(forResource: "7zz", withExtension: nil, subdirectory: "Tools") {
+            candidates.append(bundled)
+        }
+        if let resourceURL = Bundle.main.resourceURL {
+            candidates.append(resourceURL.appendingPathComponent("Tools/7zz"))
+        }
+        candidates.append(contentsOf: [
+            URL(fileURLWithPath: "/opt/homebrew/bin/7zz"),
+            URL(fileURLWithPath: "/usr/local/bin/7zz")
+        ])
+        guard let executable = candidates.first(where: {
+            FileManager.default.isExecutableFile(atPath: $0.path)
+        }) else {
+            throw FileOperationError.processFailed("找不到内置 7-Zip 归档引擎")
+        }
+        return executable
+    }
+
+    private static func testArchive(_ archive: URL, engine: URL, password: String?) throws {
+        var arguments = ["t", "-bd", "-bso0", "-bsp0"]
+        arguments.append(archive.path)
+        _ = try runArchiveProcess(
+            engine: engine,
+            arguments: arguments,
+            password: password,
+            archive: archive
         )
+    }
+
+    private static func archiveEntries(_ archive: URL, engine: URL, password: String?) throws -> [String] {
+        var arguments = ["l", "-slt"]
+        arguments.append(archive.path)
+        let output = try runArchiveProcess(
+            engine: engine,
+            arguments: arguments,
+            password: password,
+            archive: archive
+        )
+        guard let marker = output.range(of: "\n----------\n") else {
+            throw FileOperationError.processFailed(
+                L10n.format("无法读取压缩包目录：%@", archive.lastPathComponent)
+            )
+        }
+        return output[marker.upperBound...]
+            .split(whereSeparator: \.isNewline)
+            .compactMap { line in
+                let prefix = "Path = "
+                return line.hasPrefix(prefix) ? String(line.dropFirst(prefix.count)) : nil
+            }
+    }
+
+    private static func runArchiveProcess(
+        engine: URL,
+        arguments: [String],
+        currentDirectory: URL? = nil,
+        password: String?,
+        archive: URL
+    ) throws -> String {
+        let input = password.map { Data(($0 + "\n").utf8) }
+        do {
+            return try runProcess(
+                executable: engine,
+                arguments: arguments,
+                currentDirectory: currentDirectory,
+                standardInput: input,
+                standardInputIsTerminal: input != nil
+            )
+        } catch FileOperationError.processFailed(let message) {
+            let normalized = message.lowercased()
+            let passwordFailure = normalized.contains("password")
+                || normalized.contains("break signaled")
+                || normalized.contains("data error")
+            if passwordFailure {
+                if password == nil { throw FileOperationError.archivePasswordRequired(archive) }
+                throw FileOperationError.invalidArchivePassword(archive)
+            }
+            throw FileOperationError.processFailed(message)
+        }
     }
 
     private static func validateArchiveEntries(_ entries: [String], archive: URL) throws {
@@ -586,6 +833,68 @@ enum FileOperations {
                     L10n.format("压缩包包含不安全路径，已停止解压：%@", archive.lastPathComponent)
                 )
             }
+        }
+    }
+
+    private static func validateExtractedTree(_ root: URL) throws {
+        let rootPath = root.standardizedFileURL.path
+        var enumerationError: Error?
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isSymbolicLinkKey],
+            options: [],
+            errorHandler: { _, error in
+                enumerationError = error
+                return false
+            }
+        ) else {
+            throw CocoaError(.fileReadUnknown)
+        }
+        for case let url as URL in enumerator {
+            let values = try url.resourceValues(forKeys: [.isSymbolicLinkKey])
+            guard values.isSymbolicLink == true else { continue }
+            let target = try FileManager.default.destinationOfSymbolicLink(atPath: url.path)
+            let resolved = URL(
+                fileURLWithPath: target,
+                relativeTo: url.deletingLastPathComponent()
+            ).standardizedFileURL.path
+            guard resolved == rootPath || resolved.hasPrefix(rootPath + "/") else {
+                throw FileOperationError.processFailed(
+                    L10n.format("压缩包包含指向外部的符号链接：%@", url.lastPathComponent)
+                )
+            }
+        }
+        if let enumerationError {
+            throw enumerationError
+        }
+    }
+
+    private static func moveExtractedContents(from staging: URL, to destination: URL) throws -> [URL] {
+        let contents = try FileManager.default.contentsOfDirectory(
+            at: staging,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: []
+        )
+        var moved: [(source: URL, target: URL)] = []
+        do {
+            for source in contents {
+                let isDirectory = try source.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true
+                let target = uniqueURL(
+                    in: destination,
+                    preferredName: isDirectory
+                        ? source.lastPathComponent
+                        : source.deletingPathExtension().lastPathComponent,
+                    pathExtension: isDirectory ? "" : source.pathExtension
+                )
+                try FileManager.default.moveItem(at: source, to: target)
+                moved.append((source, target))
+            }
+            return moved.map(\.target)
+        } catch {
+            for item in moved.reversed() where FileManager.default.fileExists(atPath: item.target.path) {
+                try? FileManager.default.moveItem(at: item.target, to: item.source)
+            }
+            throw error
         }
     }
 
@@ -1086,18 +1395,50 @@ enum FileOperations {
     private static func runProcess(
         executable: URL,
         arguments: [String],
-        currentDirectory: URL? = nil
+        currentDirectory: URL? = nil,
+        standardInput: Data? = nil,
+        standardInputIsTerminal: Bool = false
     ) throws -> String {
         let process = Process()
-        let pipe = Pipe()
+        let outputPipe = Pipe()
+        var inputPipe: Pipe?
+        var terminalMaster: FileHandle?
+        var terminalSlave: FileHandle?
         process.executableURL = executable
         process.arguments = arguments
         process.currentDirectoryURL = currentDirectory
-        process.standardOutput = pipe
-        process.standardError = pipe
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+        if standardInput != nil, standardInputIsTerminal {
+            var masterDescriptor: Int32 = -1
+            var slaveDescriptor: Int32 = -1
+            guard openpty(&masterDescriptor, &slaveDescriptor, nil, nil, nil) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+            terminalMaster = FileHandle(fileDescriptor: masterDescriptor, closeOnDealloc: true)
+            terminalSlave = FileHandle(fileDescriptor: slaveDescriptor, closeOnDealloc: true)
+            process.standardInput = terminalSlave
+        } else if standardInput != nil {
+            let pipe = Pipe()
+            inputPipe = pipe
+            process.standardInput = pipe
+        } else {
+            process.standardInput = FileHandle.nullDevice
+        }
         try process.run()
+        if let standardInput {
+            if let terminalMaster {
+                terminalMaster.write(standardInput)
+            } else if let inputPipe {
+                inputPipe.fileHandleForWriting.write(standardInput)
+                try? inputPipe.fileHandleForWriting.close()
+            }
+        }
+        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        try? terminalMaster?.close()
+        try? terminalSlave?.close()
+        let output = String(data: outputData, encoding: .utf8) ?? ""
         guard process.terminationStatus == 0 else {
             throw FileOperationError.processFailed(output.trimmingCharacters(in: .whitespacesAndNewlines))
         }
