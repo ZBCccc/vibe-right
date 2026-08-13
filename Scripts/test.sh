@@ -10,6 +10,7 @@ swiftc \
   -framework AppKit \
   -framework CoreImage \
   "$ROOT_DIR/Sources/Core/Models.swift" \
+  "$ROOT_DIR/Sources/Core/FinderScope.swift" \
   "$ROOT_DIR/Sources/Core/FileOperations.swift" \
   "$ROOT_DIR/Sources/Core/TerminalAutomation.swift" \
   "$ROOT_DIR/Sources/Core/TextServices.swift" \

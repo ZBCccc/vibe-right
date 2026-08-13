@@ -6,7 +6,7 @@
 
 ## 当前功能
 
-- 在 Finder 空白处新建 TXT、RTF、XML、DOCX、XLSX、PPTX、Markdown、JSON、Swift 文件或文件夹
+- 在 Finder 空白处新建 TXT、RTF、XML、DOCX、XLSX、PPTX、WPS 文字/表格/演示、Ai、PSD、Markdown、JSON、Swift 文件或文件夹
 - 导入任意现成文件作为自定义新建模板
 - 使用原创内置图标或导入图片设置文件、文件夹图标，并可恢复默认
 - 将选中文件复制/移动到预设目录或临时选择的自定义目录
@@ -49,8 +49,10 @@ killall Finder
 - `Sources/Core`：宿主与扩展共享的数据模型、配置和文件操作
 - `Sources/App`：配置中心和菜单栏应用
 - `Sources/FinderExtension`：Finder Sync 菜单与动作
-- `Resources`：应用/扩展 Info.plist
+- `Resources`：应用/扩展 Info.plist 与独立生成的内置空白模板
 - `Scripts/build.sh`：无 Xcode 构建并签名 `.app`/`.appex`
+
+WPS 二进制模板的生成方式、校验摘要和隐私检查见 [`docs/BUILT_IN_TEMPLATES.md`](docs/BUILT_IN_TEMPLATES.md)。
 
 默认配置保存在：
 
@@ -62,7 +64,7 @@ killall Finder
 
 Finder Sync 是 Apple 公共 API，但系统要求用户显式启用扩展。彻底删除默认要求二次确认，写权限操作只补充所有者写入位，解散目录包含名称冲突处理与失败回滚；没有复刻原应用的付费、推广和第三方软件入口。翻译动作会把用户选中的文本作为查询参数发送到所选翻译网站，二维码生成完全离线。
 
-当前无开发者证书的本地构建使用沙盒“主目录读写”临时例外，以便 Finder 扩展处理用户主目录内的文件。正式分发前应改为 Developer ID 签名，并通过安全作用域书签或用户明确授予的目录权限收窄访问范围。
+当前无开发者证书的本地构建使用沙盒“主目录读写”和 `/Volumes/` 临时例外，以便 Finder 扩展处理用户主目录及用户启用的外接卷。正式分发前应改为 Developer ID 签名，并通过安全作用域书签或用户明确授予的目录权限收窄访问范围。
 
 ## 许可证
 

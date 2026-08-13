@@ -338,6 +338,11 @@ struct AppConfig: Codable, Equatable {
         FileTemplate(id: "docx", name: "Word", fileExtension: "docx", enabled: true, isDirectory: false),
         FileTemplate(id: "xlsx", name: "Excel", fileExtension: "xlsx", enabled: true, isDirectory: false),
         FileTemplate(id: "pptx", name: "PowerPoint", fileExtension: "pptx", enabled: true, isDirectory: false),
+        FileTemplate(id: "wps", name: "WPS 文字", fileExtension: "wps", enabled: true, isDirectory: false),
+        FileTemplate(id: "et", name: "WPS 表格", fileExtension: "et", enabled: true, isDirectory: false),
+        FileTemplate(id: "dps", name: "WPS 演示", fileExtension: "dps", enabled: true, isDirectory: false),
+        FileTemplate(id: "ai", name: "Ai", fileExtension: "ai", enabled: false, isDirectory: false),
+        FileTemplate(id: "psd", name: "PSD", fileExtension: "psd", enabled: false, isDirectory: false),
         FileTemplate(id: "md", name: "Markdown", fileExtension: "md", enabled: true, isDirectory: false),
         FileTemplate(id: "json", name: "JSON", fileExtension: "json", enabled: true, isDirectory: false),
         FileTemplate(id: "swift", name: "Swift", fileExtension: "swift", enabled: true, isDirectory: false)
@@ -388,7 +393,7 @@ struct AppConfig: Codable, Equatable {
     ]
 
     static let defaults = AppConfig(
-        schemaVersion: 18,
+        schemaVersion: 20,
         templates: defaultTemplates,
         destinations: defaultDestinations,
         favorites: defaultFavorites,
@@ -741,6 +746,22 @@ final class ConfigStore {
         if schemaVersion < 18 {
             decoded.enabledTools.insert(.compress7Z)
             decoded.schemaVersion = 18
+        }
+        if schemaVersion < 19 {
+            for template in AppConfig.defaultTemplates where ["wps", "et", "dps"].contains(template.id) {
+                if !decoded.templates.contains(where: { $0.id == template.id }) {
+                    decoded.templates.append(template)
+                }
+            }
+            decoded.schemaVersion = 19
+        }
+        if schemaVersion < 20 {
+            for template in AppConfig.defaultTemplates where ["ai", "psd"].contains(template.id) {
+                if !decoded.templates.contains(where: { $0.id == template.id }) {
+                    decoded.templates.append(template)
+                }
+            }
+            decoded.schemaVersion = 20
         }
         let supportedTools = Set(ToolActionID.settingsCases)
         var seenTools = Set<ToolActionID>()

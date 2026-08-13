@@ -1,6 +1,7 @@
 import AppKit
 import CoreImage
 import Foundation
+import ImageIO
 
 enum FileOperationError: LocalizedError {
     case noTargetDirectory
@@ -24,6 +25,12 @@ enum FileOperationError: LocalizedError {
     }
 }
 enum FileOperations {
+    private static let bundledTemplateFileNames = [
+        "wps": "Blank.wps",
+        "et": "Blank.et",
+        "dps": "Blank.dps"
+    ]
+
     struct FilenameRepair: Equatable {
         let source: URL
         let target: URL
@@ -47,7 +54,11 @@ enum FileOperations {
     }
 
     @discardableResult
-    static func create(template: FileTemplate, in directory: URL) throws -> URL {
+    static func create(
+        template: FileTemplate,
+        in directory: URL,
+        builtInTemplateDirectory: URL? = nil
+    ) throws -> URL {
         let baseName = template.isDirectory ? "新建文件夹" : "未命名"
         let url = uniqueURL(in: directory, preferredName: baseName, pathExtension: template.fileExtension)
         if let templatePath = template.templatePath {
@@ -56,10 +67,24 @@ enum FileOperations {
                 throw FileOperationError.templateMissing(source)
             }
             try FileManager.default.copyItem(at: source, to: url)
+        } else if let fileName = bundledTemplateFileNames[template.id] {
+            guard let resourceDirectory = builtInTemplateDirectory
+                ?? Bundle.main.resourceURL?.appendingPathComponent("Templates", isDirectory: true) else {
+                throw FileOperationError.processFailed("找不到内置模板资源目录")
+            }
+            let source = resourceDirectory.appendingPathComponent(fileName)
+            guard FileManager.default.fileExists(atPath: source.path) else {
+                throw FileOperationError.templateMissing(source)
+            }
+            try FileManager.default.copyItem(at: source, to: url)
         } else if template.isDirectory {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
         } else if let officeKind = OfficeDocumentKind(fileExtension: template.fileExtension) {
             try createOfficeDocument(officeKind, at: url)
+        } else if template.id == "ai" {
+            try createIllustratorDocument(at: url)
+        } else if template.id == "psd" {
+            try createPhotoshopDocument(at: url)
         } else {
             let initialData: Data
             switch template.fileExtension.lowercased() {
@@ -74,6 +99,57 @@ enum FileOperations {
             }
         }
         return url
+    }
+
+    private static func createIllustratorDocument(at output: URL) throws {
+        var mediaBox = CGRect(x: 0, y: 0, width: 595.276, height: 841.89)
+        guard let consumer = CGDataConsumer(url: output as CFURL),
+              let context = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
+            throw FileOperationError.processFailed("无法创建 Ai 文档")
+        }
+        context.beginPDFPage(nil)
+        context.setFillColor(NSColor.white.cgColor)
+        context.fill(mediaBox)
+        context.endPDFPage()
+        context.closePDF()
+    }
+
+    private static func createPhotoshopDocument(at output: URL) throws {
+        let width = 1_890
+        let height = 1_417
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ) else {
+            throw FileOperationError.processFailed("无法创建 PSD 画布")
+        }
+        context.setFillColor(NSColor.white.cgColor)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+
+        guard let image = context.makeImage(),
+              let destination = CGImageDestinationCreateWithURL(
+                output as CFURL,
+                "com.adobe.photoshop-image" as CFString,
+                1,
+                nil
+              ) else {
+            throw FileOperationError.processFailed("当前系统不支持创建 PSD 文档")
+        }
+        let properties: [CFString: Any] = [
+            kCGImagePropertyDPIWidth: 72,
+            kCGImagePropertyDPIHeight: 72
+        ]
+        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else {
+            try? FileManager.default.removeItem(at: output)
+            throw FileOperationError.processFailed("PSD 文档编码失败")
+        }
     }
 
     @discardableResult

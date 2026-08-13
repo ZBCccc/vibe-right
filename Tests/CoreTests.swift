@@ -66,6 +66,54 @@ struct CoreTests {
         precondition(wordEntries.contains("word/document.xml"))
         precondition(spreadsheetEntries.contains("xl/worksheets/sheet1.xml"))
         precondition(presentationEntries.contains("ppt/slides/slide1.xml"))
+
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let builtInTemplateDirectory = repositoryRoot
+            .appendingPathComponent("Resources", isDirectory: true)
+            .appendingPathComponent("Templates", isDirectory: true)
+        let wpsTemplates = AppConfig.defaultTemplates.filter { ["wps", "et", "dps"].contains($0.id) }
+        precondition(wpsTemplates.map(\.name) == ["WPS 文字", "WPS 表格", "WPS 演示"])
+        let compoundDocumentHeader = Data([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1])
+        for template in wpsTemplates {
+            let source = builtInTemplateDirectory.appendingPathComponent("Blank.\(template.fileExtension)")
+            let created = try FileOperations.create(
+                template: template,
+                in: root,
+                builtInTemplateDirectory: builtInTemplateDirectory
+            )
+            let sourceData = try Data(contentsOf: source)
+            let createdData = try Data(contentsOf: created)
+            precondition(createdData == sourceData)
+            precondition(Data(createdData.prefix(compoundDocumentHeader.count)) == compoundDocumentHeader)
+            let description = try fileDescription(at: source)
+            precondition(description.contains("Composite Document File V2 Document"))
+            precondition(!description.contains("Author:"))
+            precondition(!description.contains("Last Saved By:"))
+        }
+
+        let aiTemplate = AppConfig.defaultTemplates.first(where: { $0.id == "ai" })!
+        let aiDocument = try FileOperations.create(template: aiTemplate, in: root)
+        let aiData = try Data(contentsOf: aiDocument)
+        precondition(String(data: aiData.prefix(5), encoding: .ascii) == "%PDF-")
+        let aiPDF = CGPDFDocument(aiDocument as CFURL)
+        precondition(aiPDF?.numberOfPages == 1)
+        let aiMediaBox = aiPDF?.page(at: 1)?.getBoxRect(.mediaBox)
+        precondition(abs((aiMediaBox?.width ?? 0) - 595.276) < 0.1)
+        precondition(abs((aiMediaBox?.height ?? 0) - 841.89) < 0.1)
+
+        let psdTemplate = AppConfig.defaultTemplates.first(where: { $0.id == "psd" })!
+        let psdDocument = try FileOperations.create(template: psdTemplate, in: root)
+        let psdData = try Data(contentsOf: psdDocument)
+        precondition(String(data: psdData.prefix(4), encoding: .ascii) == "8BPS")
+        let psdBitmap = NSBitmapImageRep(data: psdData)
+        precondition(psdBitmap?.pixelsWide == 1_890)
+        precondition(psdBitmap?.pixelsHigh == 1_417)
+        let aiDescription = try fileDescription(at: aiDocument)
+        let psdDescription = try fileDescription(at: psdDocument)
+        precondition(aiDescription.contains("PDF document"))
+        precondition(psdDescription.contains("Adobe Photoshop Image"))
         let libreOffice = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
         if FileManager.default.isExecutableFile(atPath: libreOffice) {
             try validateWithLibreOffice([word, spreadsheet, presentation], executable: libreOffice, root: root)
@@ -119,6 +167,18 @@ struct CoreTests {
         precondition(AppConfig.defaultApplications.contains(where: { $0.id == "sublime-text" }))
         precondition(AppConfig.defaultApplications.contains(where: { $0.id == "android-studio" }))
         precondition(AppConfig.defaultApplications.contains(where: { $0.id == "rubymine" }))
+        precondition(Set(AppConfig.defaultTemplates.map(\.id)).isSuperset(of: ["wps", "et", "dps"]))
+        precondition(AppConfig.defaultTemplates.first(where: { $0.id == "ai" })?.enabled == false)
+        precondition(AppConfig.defaultTemplates.first(where: { $0.id == "psd" })?.enabled == false)
+
+        let internalTarget = URL(fileURLWithPath: "/Users/example/Documents", isDirectory: true)
+        let externalTarget = URL(fileURLWithPath: "/Volumes/External", isDirectory: true)
+        let selectedFile = internalTarget.appendingPathComponent("selected.txt")
+        precondition(FinderScope.contextURLs(selected: [], targeted: nil).isEmpty)
+        precondition(FinderScope.contextURLs(selected: [], targeted: externalTarget) == [externalTarget])
+        precondition(FinderScope.contextURLs(selected: [selectedFile], targeted: externalTarget) == [selectedFile])
+        precondition(!FinderScope.isExternalVolume(internalTarget))
+        precondition(FinderScope.isExternalVolume(externalTarget))
 
         let legacyConfigURL = root.appendingPathComponent("legacy-config.json")
         let legacyConfig = """
@@ -137,6 +197,11 @@ struct CoreTests {
         precondition(migrated.config.enabledTools.contains(.cut))
         precondition(migrated.config.templates.contains(where: { $0.id == "rtf" }))
         precondition(migrated.config.templates.contains(where: { $0.id == "xml" }))
+        precondition(migrated.config.templates.contains(where: { $0.id == "wps" }))
+        precondition(migrated.config.templates.contains(where: { $0.id == "et" }))
+        precondition(migrated.config.templates.contains(where: { $0.id == "dps" }))
+        precondition(migrated.config.templates.contains(where: { $0.id == "ai" }))
+        precondition(migrated.config.templates.contains(where: { $0.id == "psd" }))
         precondition(migrated.config.enabledTools.contains(.copyPath))
         precondition(migrated.config.applications.first(where: { $0.id == "cursor" })?.enabled == true)
         precondition(migrated.config.applications.first(where: { $0.id == "warp" })?.enabled == true)
@@ -229,6 +294,34 @@ struct CoreTests {
         precondition(version13Migrated.config.templates[0].showInMainMenu == false)
         precondition(version13Migrated.config.terminalOpenMode == .window)
         precondition(version13Migrated.config.iTermOpenMode == .window)
+        precondition(version13Migrated.config.templates.contains(where: { $0.id == "wps" }))
+        precondition(version13Migrated.config.templates.contains(where: { $0.id == "et" }))
+        precondition(version13Migrated.config.templates.contains(where: { $0.id == "dps" }))
+        precondition(version13Migrated.config.templates.contains(where: { $0.id == "ai" }))
+        precondition(version13Migrated.config.templates.contains(where: { $0.id == "psd" }))
+
+        let version18ConfigURL = root.appendingPathComponent("version-18-config.json")
+        let version18Config = """
+        {
+          "schemaVersion": 18,
+          "templates": [
+            {"id": "wps", "name": "我的 WPS", "fileExtension": "wps", "enabled": false, "isDirectory": false},
+            {"id": "ai", "name": "我的 Ai", "fileExtension": "ai", "enabled": false, "isDirectory": false}
+          ]
+        }
+        """
+        try Data(version18Config.utf8).write(to: version18ConfigURL)
+        let version18Migrated = ConfigStore(configURL: version18ConfigURL)
+        precondition(version18Migrated.config.schemaVersion == AppConfig.defaults.schemaVersion)
+        precondition(version18Migrated.config.templates.filter { $0.id == "wps" }.count == 1)
+        precondition(version18Migrated.config.templates.first(where: { $0.id == "wps" })?.name == "我的 WPS")
+        precondition(version18Migrated.config.templates.first(where: { $0.id == "wps" })?.enabled == false)
+        precondition(version18Migrated.config.templates.contains(where: { $0.id == "et" }))
+        precondition(version18Migrated.config.templates.contains(where: { $0.id == "dps" }))
+        precondition(version18Migrated.config.templates.filter { $0.id == "ai" }.count == 1)
+        precondition(version18Migrated.config.templates.first(where: { $0.id == "ai" })?.name == "我的 Ai")
+        precondition(version18Migrated.config.templates.first(where: { $0.id == "ai" })?.enabled == false)
+        precondition(version18Migrated.config.templates.contains(where: { $0.id == "psd" }))
 
         let automationDirectory = root.appendingPathComponent("quoted \"folder\" & line\nnext", isDirectory: true)
         try FileManager.default.createDirectory(at: automationDirectory, withIntermediateDirectories: true)
@@ -454,6 +547,23 @@ struct CoreTests {
             throw FileOperationError.processFailed(output)
         }
         return output.split(separator: "\n").map(String.init)
+    }
+
+    private static func fileDescription(at url: URL) throws -> String {
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/file")
+        process.arguments = ["-b", url.path]
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        process.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: data, encoding: .utf8) ?? ""
+        guard process.terminationStatus == 0 else {
+            throw FileOperationError.processFailed(output)
+        }
+        return output
     }
 
     private static func validateWithLibreOffice(_ urls: [URL], executable: String, root: URL) throws {

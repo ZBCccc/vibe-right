@@ -57,12 +57,14 @@ final class FinderSync: FIFinderSync {
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
         store.reload()
         updateDirectoryURLs()
-        let contextURLs = controller.selectedItemURLs() ?? [controller.targetedURL()].compactMap { $0 }
-        if !store.config.includeExternalVolumes, contextURLs.contains(where: isOnExternalVolume) {
+        let selectionURLs = controller.selectedItemURLs() ?? []
+        let contextURLs = FinderScope.contextURLs(selected: selectionURLs, targeted: controller.targetedURL())
+        guard !contextURLs.isEmpty else { return nil }
+        if !store.config.includeExternalVolumes, contextURLs.contains(where: FinderScope.isExternalVolume) {
             return nil
         }
         let menu = NSMenu(title: "灵犀右键")
-        let hasSelection = !(controller.selectedItemURLs()?.isEmpty ?? true)
+        let hasSelection = !selectionURLs.isEmpty
 
         if menuKind == .contextualMenuForContainer || menuKind == .toolbarItemMenu || !hasSelection {
             addNewFileItems(to: menu)
@@ -691,11 +693,6 @@ final class FinderSync: FIFinderSync {
     private func isImage(_ url: URL) -> Bool {
         let extensions: Set<String> = ["png", "jpg", "jpeg", "heic", "heif", "webp", "gif", "tif", "tiff", "bmp", "icns"]
         return extensions.contains(url.pathExtension.lowercased())
-    }
-
-    private func isOnExternalVolume(_ url: URL) -> Bool {
-        let path = url.standardizedFileURL.path
-        return path == "/Volumes" || path.hasPrefix("/Volumes/")
     }
 
     private func updateDirectoryURLs() {
