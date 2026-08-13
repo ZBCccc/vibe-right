@@ -91,6 +91,11 @@ struct CoreTests {
             let decodedLanguage = try JSONDecoder().decode(AppLanguage.self, from: data)
             precondition(decodedLanguage == language)
         }
+        for modifier in AlternateMenuModifier.allCases {
+            let data = try JSONEncoder().encode(modifier)
+            let decodedModifier = try JSONDecoder().decode(AlternateMenuModifier.self, from: data)
+            precondition(decodedModifier == modifier)
+        }
 
         let sourceKeys = try sourceLocalizationKeys(in: repositoryRoot.appendingPathComponent("Sources", isDirectory: true))
         let simplifiedTranslations = L10n.availableTranslations(
@@ -138,6 +143,15 @@ struct CoreTests {
             }
             precondition(Set(values.keys) == expectedServiceKeys)
             precondition(values.values.allSatisfy { !$0.isEmpty })
+
+            let infoPlistFile = appLocalizationRoot
+                .appendingPathComponent("\(language.rawValue).lproj", isDirectory: true)
+                .appendingPathComponent("InfoPlist.strings")
+            guard let infoPlistValues = NSDictionary(contentsOf: infoPlistFile) as? [String: String] else {
+                preconditionFailure("Could not load \(infoPlistFile.path)")
+            }
+            precondition(Set(infoPlistValues.keys) == ["NSAppleEventsUsageDescription"])
+            precondition(infoPlistValues.values.allSatisfy { !$0.isEmpty })
         }
 
         let builtInTemplateDirectory = repositoryRoot
@@ -201,6 +215,10 @@ struct CoreTests {
             $0.playSound = false
             $0.terminalOpenMode = .tab
             $0.iTermOpenMode = .tab
+            $0.modifierRightClickEnabled = true
+            $0.modifierRightClickModifier = .option
+            $0.middleClickEnabled = true
+            $0.threeFingerTapEnabled = true
             $0.templates[0].showInMainMenu = true
             $0.destinations[0].name = "下载目录"
             $0.destinations.swapAt(0, 1)
@@ -223,6 +241,10 @@ struct CoreTests {
         precondition(reloaded.config.orderedTools(from: [.copyName, .copyPath]) == [.copyPath, .copyName])
         precondition(reloaded.config.terminalOpenMode == .tab)
         precondition(reloaded.config.iTermOpenMode == .tab)
+        precondition(reloaded.config.modifierRightClickEnabled)
+        precondition(reloaded.config.modifierRightClickModifier == .option)
+        precondition(reloaded.config.middleClickEnabled)
+        precondition(reloaded.config.threeFingerTapEnabled)
         precondition(reloaded.config.templates[0].showInMainMenu)
         precondition(reloaded.config.destinations[1].name == "下载目录")
         precondition(reloaded.config.enabledIconPresets == Set(FileIconPreset.allCases))
@@ -250,6 +272,39 @@ struct CoreTests {
         precondition(FinderScope.contextURLs(selected: [selectedFile], targeted: externalTarget) == [selectedFile])
         precondition(!FinderScope.isExternalVolume(internalTarget))
         precondition(FinderScope.isExternalVolume(externalTarget))
+
+        let cloudHome = ConfigStore.userHomeDirectory
+        let iCloudTarget = cloudHome
+            .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs", isDirectory: true)
+        let oneDriveTarget = cloudHome
+            .appendingPathComponent("Library/CloudStorage/OneDrive-Personal", isDirectory: true)
+        let legacyOneDriveTarget = cloudHome
+            .appendingPathComponent("OneDrive-Work", isDirectory: true)
+        let cloudSelection = iCloudTarget.appendingPathComponent("selected.txt")
+        let serializedContext = iCloudTarget.path
+            + FinderContextSnapshot.fieldSeparator
+            + cloudSelection.path
+            + FinderContextSnapshot.itemSeparator
+            + oneDriveTarget.path
+        let cloudContext = FinderContextSnapshot(serialized: serializedContext)
+        precondition(cloudContext?.targetedURL == iCloudTarget.standardizedFileURL)
+        precondition(cloudContext?.selectedURLs == [
+            cloudSelection.standardizedFileURL,
+            URL(fileURLWithPath: oneDriveTarget.path).standardizedFileURL
+        ])
+        precondition(cloudContext?.requiresAlternateMenu == true)
+        precondition(FinderContextSnapshot.isCloudProviderURL(iCloudTarget))
+        precondition(FinderContextSnapshot.isCloudProviderURL(oneDriveTarget))
+        precondition(FinderContextSnapshot.isCloudProviderURL(legacyOneDriveTarget))
+        precondition(FinderContextSnapshot.isCloudProviderURL(
+            cloudHome.appendingPathComponent("Library/CloudStorage", isDirectory: true)
+        ))
+        precondition(!FinderContextSnapshot.isCloudProviderURL(internalTarget))
+        let selectionOnlyContext = FinderContextSnapshot(
+            serialized: FinderContextSnapshot.fieldSeparator + cloudSelection.path
+        )
+        precondition(selectionOnlyContext?.targetedURL == iCloudTarget.standardizedFileURL)
+        precondition(FinderContextSnapshot(serialized: "not a context") == nil)
 
         let legacyConfigURL = root.appendingPathComponent("legacy-config.json")
         let legacyConfig = """
@@ -404,8 +459,24 @@ struct CoreTests {
         """
         try Data(version20Config.utf8).write(to: version20ConfigURL)
         let version20Migrated = ConfigStore(configURL: version20ConfigURL)
-        precondition(version20Migrated.config.schemaVersion == 21)
+        precondition(version20Migrated.config.schemaVersion == AppConfig.defaults.schemaVersion)
         precondition(version20Migrated.config.language == .system)
+
+        let version21ConfigURL = root.appendingPathComponent("version-21-config.json")
+        let version21Config = """
+        {
+          "schemaVersion": 21,
+          "templates": [],
+          "destinations": []
+        }
+        """
+        try Data(version21Config.utf8).write(to: version21ConfigURL)
+        let version21Migrated = ConfigStore(configURL: version21ConfigURL)
+        precondition(version21Migrated.config.schemaVersion == AppConfig.defaults.schemaVersion)
+        precondition(!version21Migrated.config.modifierRightClickEnabled)
+        precondition(version21Migrated.config.modifierRightClickModifier == .shift)
+        precondition(!version21Migrated.config.middleClickEnabled)
+        precondition(!version21Migrated.config.threeFingerTapEnabled)
 
         let localizedConfigURL = root.appendingPathComponent("localized-config.json")
         let localizedStore = ConfigStore(configURL: localizedConfigURL)

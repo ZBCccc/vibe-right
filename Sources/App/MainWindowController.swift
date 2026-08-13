@@ -25,6 +25,10 @@ final class MainWindowController: NSWindowController {
         window?.title = L10n.text("灵犀右键")
         (window?.contentViewController as? MainViewController)?.refreshLocalizedUI()
     }
+
+    func refreshPermissionState() {
+        (window?.contentViewController as? MainViewController)?.refreshPermissionState()
+    }
 }
 
 private enum SettingsSection: Int, CaseIterable {
@@ -285,11 +289,78 @@ final class MainViewController: NSViewController {
             self?.renderSelectedSection()
         })
         contentStack.addArrangedSubview(card(title: "作用范围", symbol: "scope", content: scope))
+
+        let alternateMenu = verticalStack()
+        alternateMenu.addArrangedSubview(descriptionLabel(
+            "用于 iCloud、OneDrive 等不显示 Finder Sync 菜单的位置。首次触发时，macOS 会请求读取 Finder 当前目录。"
+        ))
+        alternateMenu.addArrangedSubview(divider())
+        alternateMenu.addArrangedSubview(switchRow(
+            title: "按住修饰键后右键点击",
+            subtitle: "拦截该组合并在光标位置打开灵犀右键菜单",
+            value: store.config.modifierRightClickEnabled
+        ) { [weak self] value in
+            self?.updateConfig { $0.modifierRightClickEnabled = value }
+            self?.renderSelectedSection()
+        })
+        alternateMenu.addArrangedSubview(selectionRow(
+            title: "修饰键",
+            subtitle: "可选 Shift、Control、Option 或 Command",
+            options: AlternateMenuModifier.allCases.map(\.title),
+            selectedIndex: AlternateMenuModifier.allCases.firstIndex(of: store.config.modifierRightClickModifier) ?? 0
+        ) { [weak self] index in
+            let modifiers = AlternateMenuModifier.allCases
+            guard modifiers.indices.contains(index) else { return }
+            self?.updateConfig { $0.modifierRightClickModifier = modifiers[index] }
+        })
+        alternateMenu.addArrangedSubview(divider())
+        alternateMenu.addArrangedSubview(switchRow(
+            title: "鼠标中键点击",
+            subtitle: "在云盘目录中用中键打开菜单",
+            value: store.config.middleClickEnabled
+        ) { [weak self] value in
+            self?.updateConfig { $0.middleClickEnabled = value }
+            self?.renderSelectedSection()
+        })
+        alternateMenu.addArrangedSubview(divider())
+        alternateMenu.addArrangedSubview(switchRow(
+            title: "触控板三指轻点或点按",
+            subtitle: "三指短按且未移动时打开菜单",
+            value: store.config.threeFingerTapEnabled
+        ) { [weak self] value in
+            self?.updateConfig { $0.threeFingerTapEnabled = value }
+        })
+        alternateMenu.addArrangedSubview(divider())
+        let permissionGranted = AlternateMenuTriggerController.isAccessibilityTrusted
+        let permission = statusView(
+            title: permissionGranted ? "辅助功能权限已授予" : "鼠标入口需要辅助功能权限",
+            subtitle: permissionGranted
+                ? "修饰键右键和鼠标中键监听已可用。"
+                : "macOS 需要此权限来拦截后再安全转发鼠标事件。",
+            symbol: permissionGranted ? "checkmark.shield.fill" : "lock.trianglebadge.exclamationmark",
+            color: permissionGranted ? .systemGreen : .systemOrange
+        )
+        if !permissionGranted {
+            let openPermission = NSButton(
+                title: L10n.text("打开辅助功能权限设置"),
+                target: self,
+                action: #selector(openAccessibilitySettings)
+            )
+            openPermission.bezelStyle = .rounded
+            permission.addArrangedSubview(openPermission)
+        }
+        alternateMenu.addArrangedSubview(permission)
+        contentStack.addArrangedSubview(card(title: "云盘备用菜单入口", symbol: "icloud.and.arrow.down", content: alternateMenu))
     }
 
     fileprivate func refreshLocalizedUI() {
         view.window?.title = L10n.text("灵犀右键")
         buildSidebar()
+        renderSelectedSection()
+    }
+
+    fileprivate func refreshPermissionState() {
+        guard selectedSection == .general else { return }
         renderSelectedSection()
     }
 
@@ -685,7 +756,7 @@ final class MainViewController: NSViewController {
         icon.heightAnchor.constraint(equalToConstant: 72).isActive = true
         hero.addArrangedSubview(icon)
         hero.addArrangedSubview(label("灵犀右键 0.1.0", size: 20, weight: .bold))
-        hero.addArrangedSubview(descriptionLabel("独立实现的原生 macOS Finder 效率工具。基于公开 Finder Sync API，不依赖注入、辅助功能模拟或私有框架。"))
+        hero.addArrangedSubview(descriptionLabel("独立实现的原生 macOS Finder 效率工具。基于公开 Finder Sync、Core Graphics 和 AppKit API，不依赖注入或私有框架。"))
         contentStack.addArrangedSubview(card(title: "关于项目", symbol: "sparkles", content: hero))
 
         let path = ConfigStore.defaultConfigURL.path
@@ -700,6 +771,10 @@ final class MainViewController: NSViewController {
 
     @objc private func openExtensionManagement() {
         FIFinderSyncController.showExtensionManagementInterface()
+    }
+
+    @objc private func openAccessibilitySettings() {
+        AlternateMenuTriggerController.openAccessibilitySettings()
     }
 
     @objc private func resetTemplates() {

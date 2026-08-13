@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: MainWindowController?
     private var statusItem: NSStatusItem?
     private let textServiceProvider = TextServiceProvider()
+    private var alternateMenuTriggerController: AlternateMenuTriggerController?
     private var handledLaunchAction = false
     private var launchSettingsWorkItem: DispatchWorkItem?
     private var currentLanguage: AppLanguage = .system
@@ -28,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.servicesProvider = textServiceProvider
         ConfigStore.shared.reload()
         currentLanguage = ConfigStore.shared.config.language
+        alternateMenuTriggerController = AlternateMenuTriggerController()
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(configChanged),
@@ -47,7 +49,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         launchSettingsWorkItem?.cancel()
+        alternateMenuTriggerController = nil
         DistributedNotificationCenter.default().removeObserver(self)
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        alternateMenuTriggerController?.refreshPermissionState()
+        windowController?.refreshPermissionState()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

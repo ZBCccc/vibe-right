@@ -19,15 +19,19 @@ swiftc \
   -O \
   -module-name VibeRight \
   -framework AppKit \
+  -framework ApplicationServices \
   -framework CoreImage \
   -framework FinderSync \
   "$ROOT_DIR/Sources/Core/Localization.swift" \
   "$ROOT_DIR/Sources/Core/Models.swift" \
+  "$ROOT_DIR/Sources/Core/FinderContext.swift" \
   "$ROOT_DIR/Sources/Core/FinderScope.swift" \
   "$ROOT_DIR/Sources/Core/FileOperations.swift" \
   "$ROOT_DIR/Sources/Core/TerminalAutomation.swift" \
   "$ROOT_DIR/Sources/Core/TextServices.swift" \
+  "$ROOT_DIR/Sources/FinderExtension/FinderSync.swift" \
   "$ROOT_DIR/Sources/App/Main.swift" \
+  "$ROOT_DIR/Sources/App/AlternateMenuTriggerController.swift" \
   "$ROOT_DIR/Sources/App/MainWindowController.swift" \
   -o "$APP_DIR/Contents/MacOS/VibeRight"
 
@@ -46,6 +50,7 @@ swiftc \
   -framework FinderSync \
   "$ROOT_DIR/Sources/Core/Localization.swift" \
   "$ROOT_DIR/Sources/Core/Models.swift" \
+  "$ROOT_DIR/Sources/Core/FinderContext.swift" \
   "$ROOT_DIR/Sources/Core/FinderScope.swift" \
   "$ROOT_DIR/Sources/Core/FileOperations.swift" \
   "$ROOT_DIR/Sources/Core/TerminalAutomation.swift" \

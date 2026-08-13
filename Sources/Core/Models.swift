@@ -100,6 +100,17 @@ enum TerminalOpenMode: String, Codable, CaseIterable {
     }
 }
 
+enum AlternateMenuModifier: String, Codable, CaseIterable {
+    case shift
+    case control
+    case option
+    case command
+
+    var title: String {
+        rawValue.prefix(1).uppercased() + rawValue.dropFirst()
+    }
+}
+
 enum FileIconPreset: String, Codable, CaseIterable, Identifiable {
     case app
     case apple
@@ -320,6 +331,10 @@ struct AppConfig: Codable, Equatable {
     var showIcons: Bool
     var showMenuBarIcon: Bool
     var includeExternalVolumes: Bool
+    var modifierRightClickEnabled: Bool
+    var modifierRightClickModifier: AlternateMenuModifier
+    var middleClickEnabled: Bool
+    var threeFingerTapEnabled: Bool
     var autoOpenNewFile: Bool
     var playSound: Bool
     var moveEnabled: Bool
@@ -398,7 +413,7 @@ struct AppConfig: Codable, Equatable {
     ]
 
     static let defaults = AppConfig(
-        schemaVersion: 21,
+        schemaVersion: 22,
         language: .system,
         templates: defaultTemplates,
         destinations: defaultDestinations,
@@ -412,6 +427,10 @@ struct AppConfig: Codable, Equatable {
         showIcons: true,
         showMenuBarIcon: true,
         includeExternalVolumes: false,
+        modifierRightClickEnabled: false,
+        modifierRightClickModifier: .shift,
+        middleClickEnabled: false,
+        threeFingerTapEnabled: false,
         autoOpenNewFile: false,
         playSound: true,
         moveEnabled: true,
@@ -443,6 +462,10 @@ struct AppConfig: Codable, Equatable {
         case showIcons
         case showMenuBarIcon
         case includeExternalVolumes
+        case modifierRightClickEnabled
+        case modifierRightClickModifier
+        case middleClickEnabled
+        case threeFingerTapEnabled
         case autoOpenNewFile
         case playSound
         case moveEnabled
@@ -474,6 +497,10 @@ struct AppConfig: Codable, Equatable {
         showIcons: Bool,
         showMenuBarIcon: Bool,
         includeExternalVolumes: Bool,
+        modifierRightClickEnabled: Bool,
+        modifierRightClickModifier: AlternateMenuModifier,
+        middleClickEnabled: Bool,
+        threeFingerTapEnabled: Bool,
         autoOpenNewFile: Bool,
         playSound: Bool,
         moveEnabled: Bool,
@@ -503,6 +530,10 @@ struct AppConfig: Codable, Equatable {
         self.showIcons = showIcons
         self.showMenuBarIcon = showMenuBarIcon
         self.includeExternalVolumes = includeExternalVolumes
+        self.modifierRightClickEnabled = modifierRightClickEnabled
+        self.modifierRightClickModifier = modifierRightClickModifier
+        self.middleClickEnabled = middleClickEnabled
+        self.threeFingerTapEnabled = threeFingerTapEnabled
         self.autoOpenNewFile = autoOpenNewFile
         self.playSound = playSound
         self.moveEnabled = moveEnabled
@@ -535,6 +566,10 @@ struct AppConfig: Codable, Equatable {
         showIcons = try values.decodeIfPresent(Bool.self, forKey: .showIcons) ?? true
         showMenuBarIcon = try values.decodeIfPresent(Bool.self, forKey: .showMenuBarIcon) ?? true
         includeExternalVolumes = try values.decodeIfPresent(Bool.self, forKey: .includeExternalVolumes) ?? false
+        modifierRightClickEnabled = try values.decodeIfPresent(Bool.self, forKey: .modifierRightClickEnabled) ?? false
+        modifierRightClickModifier = try values.decodeIfPresent(AlternateMenuModifier.self, forKey: .modifierRightClickModifier) ?? .shift
+        middleClickEnabled = try values.decodeIfPresent(Bool.self, forKey: .middleClickEnabled) ?? false
+        threeFingerTapEnabled = try values.decodeIfPresent(Bool.self, forKey: .threeFingerTapEnabled) ?? false
         autoOpenNewFile = try values.decodeIfPresent(Bool.self, forKey: .autoOpenNewFile) ?? false
         playSound = try values.decodeIfPresent(Bool.self, forKey: .playSound) ?? true
         moveEnabled = try values.decodeIfPresent(Bool.self, forKey: .moveEnabled) ?? true
@@ -779,6 +814,13 @@ final class ConfigStore {
         if schemaVersion < 21 {
             decoded.language = .system
             decoded.schemaVersion = 21
+        }
+        if schemaVersion < 22 {
+            decoded.modifierRightClickEnabled = false
+            decoded.modifierRightClickModifier = .shift
+            decoded.middleClickEnabled = false
+            decoded.threeFingerTapEnabled = false
+            decoded.schemaVersion = 22
         }
         let supportedTools = Set(ToolActionID.settingsCases)
         var seenTools = Set<ToolActionID>()

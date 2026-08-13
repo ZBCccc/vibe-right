@@ -16,6 +16,7 @@
     <key>LSMinimumSystemVersion</key><string>13.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
+    <key>NSAppleEventsUsageDescription</key><string>灵犀右键需要读取 Finder 当前选择和目录，以便在云盘位置显示备用右键菜单。</string>
     <key>NSServices</key>
     <array>
         <dict>

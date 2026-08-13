@@ -6,31 +6,46 @@ import Foundation
 final class FinderSync: FIFinderSync {
     private let controller = FIFinderSyncController.default()
     private let store = ConfigStore.shared
+    private let standalone: Bool
+    private var explicitContext: FinderContextSnapshot?
     private var payloadByTag: [Int: String] = [:]
     private var nextActionTag = 10_000
 
     override init() {
+        standalone = false
         super.init()
+        configure()
+    }
+
+    init(standalone: Bool) {
+        self.standalone = standalone
+        super.init()
+        configure()
+    }
+
+    private func configure() {
         store.reload()
-        updateDirectoryURLs()
+        if !standalone { updateDirectoryURLs() }
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(configChanged),
             name: Notification.Name("com.vibecoding.VibeRight.configChanged"),
             object: nil
         )
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self,
-            selector: #selector(volumesChanged),
-            name: NSWorkspace.didMountNotification,
-            object: nil
-        )
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self,
-            selector: #selector(volumesChanged),
-            name: NSWorkspace.didUnmountNotification,
-            object: nil
-        )
+        if !standalone {
+            NSWorkspace.shared.notificationCenter.addObserver(
+                self,
+                selector: #selector(volumesChanged),
+                name: NSWorkspace.didMountNotification,
+                object: nil
+            )
+            NSWorkspace.shared.notificationCenter.addObserver(
+                self,
+                selector: #selector(volumesChanged),
+                name: NSWorkspace.didUnmountNotification,
+                object: nil
+            )
+        }
     }
 
     deinit {
@@ -40,11 +55,11 @@ final class FinderSync: FIFinderSync {
 
     @objc private func configChanged() {
         store.reload()
-        updateDirectoryURLs()
+        if !standalone { updateDirectoryURLs() }
     }
 
     @objc private func volumesChanged() {
-        updateDirectoryURLs()
+        if !standalone { updateDirectoryURLs() }
     }
 
     override var toolbarItemName: String { L10n.text("灵犀右键") }
@@ -55,10 +70,25 @@ final class FinderSync: FIFinderSync {
     }
 
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
+        explicitContext = nil
+        return makeMenu(for: menuKind)
+    }
+
+    func menu(for snapshot: FinderContextSnapshot) -> NSMenu? {
+        explicitContext = snapshot
+        let kind: FIMenuKind = snapshot.selectedURLs.isEmpty
+            ? .contextualMenuForContainer
+            : .contextualMenuForItems
+        return makeMenu(for: kind)
+    }
+
+    private func makeMenu(for menuKind: FIMenuKind) -> NSMenu? {
         store.reload()
-        updateDirectoryURLs()
-        let selectionURLs = controller.selectedItemURLs() ?? []
-        let contextURLs = FinderScope.contextURLs(selected: selectionURLs, targeted: controller.targetedURL())
+        if !standalone { updateDirectoryURLs() }
+        payloadByTag.removeAll(keepingCapacity: true)
+        nextActionTag = 10_000
+        let selectionURLs = selectedURLs()
+        let contextURLs = FinderScope.contextURLs(selected: selectionURLs, targeted: targetedURL())
         guard !contextURLs.isEmpty else { return nil }
         if !store.config.includeExternalVolumes, contextURLs.contains(where: FinderScope.isExternalVolume) {
             return nil
@@ -663,21 +693,25 @@ final class FinderSync: FIFinderSync {
     }
 
     private func targetDirectory() throws -> URL {
-        if let target = controller.targetedURL() {
+        if let target = targetedURL() {
             var isDirectory: ObjCBool = false
             if FileManager.default.fileExists(atPath: target.path, isDirectory: &isDirectory), isDirectory.boolValue {
                 return target
             }
             return target.deletingLastPathComponent()
         }
-        if let selected = controller.selectedItemURLs()?.first {
+        if let selected = selectedURLs().first {
             return selected.deletingLastPathComponent()
         }
         throw FileOperationError.noTargetDirectory
     }
 
     private func selectedURLs() -> [URL] {
-        controller.selectedItemURLs() ?? []
+        explicitContext?.selectedURLs ?? controller.selectedItemURLs() ?? []
+    }
+
+    private func targetedURL() -> URL? {
+        explicitContext?.targetedURL ?? controller.targetedURL()
     }
 
     private func directoryURLs(from urls: [URL]) -> [URL] {
@@ -701,6 +735,7 @@ final class FinderSync: FIFinderSync {
     }
 
     private func updateDirectoryURLs() {
+        guard !standalone else { return }
         var urls = [URL(fileURLWithPath: "/", isDirectory: true)]
         if store.config.includeExternalVolumes {
             let volumes = FileManager.default.mountedVolumeURLs(
